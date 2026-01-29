@@ -201,7 +201,8 @@ const commands = {
     const pagination = options.limit ? { page: 1, per_page: options.limit } : undefined;
 
     // Convenience filter for smart money only
-    if (options['smart-money'] || flags['smart-money']) {
+    const onlySmartMoney = options['smart-money'] || flags['smart-money'] || false;
+    if (onlySmartMoney) {
       filters.only_smart_money = true;
     }
 
@@ -209,7 +210,7 @@ const commands = {
       'screener': () => api.tokenScreener({ chains, timeframe, filters, orderBy, pagination }),
       'holders': () => api.tokenHolders({ tokenAddress, chain, filters, orderBy, pagination }),
       'flows': () => api.tokenFlows({ tokenAddress, chain, filters, orderBy, pagination }),
-      'dex-trades': () => api.tokenDexTrades({ tokenAddress, chain, filters, orderBy, pagination }),
+      'dex-trades': () => api.tokenDexTrades({ tokenAddress, chain, onlySmartMoney, filters, orderBy, pagination }),
       'pnl': () => api.tokenPnlLeaderboard({ tokenAddress, chain, filters, orderBy, pagination }),
       'who-bought-sold': () => api.tokenWhoBoughtSold({ tokenAddress, chain, filters, orderBy, pagination }),
       'help': () => ({

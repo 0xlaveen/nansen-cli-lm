@@ -172,10 +172,11 @@ export class NansenAPI {
   }
 
   async tokenHolders(params = {}) {
-    const { tokenAddress, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
-    return this.request('/api/v1/token-god-mode/holders', {
+    const { tokenAddress, chain = 'solana', labelType = 'all_holders', filters = {}, orderBy, pagination } = params;
+    return this.request('/api/v1/tgm/holders', {
       token_address: tokenAddress,
       chain,
+      label_type: labelType,
       filters,
       order_by: orderBy,
       pagination
@@ -183,8 +184,8 @@ export class NansenAPI {
   }
 
   async tokenFlows(params = {}) {
-    const { tokenAddress, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
-    return this.request('/api/v1/token-god-mode/flows', {
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination } = params;
+    return this.request('/api/v1/tgm/flows', {
       token_address: tokenAddress,
       chain,
       filters,
@@ -194,10 +195,20 @@ export class NansenAPI {
   }
 
   async tokenDexTrades(params = {}) {
-    const { tokenAddress, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
-    return this.request('/api/v1/token-god-mode/dex-trades', {
+    const { tokenAddress, chain = 'solana', onlySmartMoney = false, filters = {}, orderBy, pagination, days = 7 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    // Apply smart money filter via filters object
+    if (onlySmartMoney) {
+      filters.include_smart_money_labels = filters.include_smart_money_labels || 
+        ['Fund', 'Smart Trader', '30D Smart Trader', '90D Smart Trader', '180D Smart Trader'];
+    }
+    
+    return this.request('/api/v1/tgm/dex-trades', {
       token_address: tokenAddress,
       chain,
+      date: { from, to },
       filters,
       order_by: orderBy,
       pagination
@@ -205,10 +216,13 @@ export class NansenAPI {
   }
 
   async tokenPnlLeaderboard(params = {}) {
-    const { tokenAddress, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
-    return this.request('/api/v1/token-god-mode/pnl-leaderboard', {
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination, days = 30 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/tgm/pnl-leaderboard', {
       token_address: tokenAddress,
       chain,
+      date: { from, to },
       filters,
       order_by: orderBy,
       pagination
@@ -216,8 +230,8 @@ export class NansenAPI {
   }
 
   async tokenWhoBoughtSold(params = {}) {
-    const { tokenAddress, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
-    return this.request('/api/v1/token-god-mode/who-bought-sold', {
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination } = params;
+    return this.request('/api/v1/tgm/who-bought-sold', {
       token_address: tokenAddress,
       chain,
       filters,
