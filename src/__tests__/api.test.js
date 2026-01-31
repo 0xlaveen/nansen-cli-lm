@@ -105,6 +105,73 @@ const MOCK_RESPONSES = {
     holdings: [
       { protocol: 'Aave', value_usd: 50000 }
     ]
+  },
+  // New Smart Money endpoints
+  smartMoneyHistoricalHoldings: {
+    holdings: [
+      { token_symbol: 'SOL', date: '2024-01-01', balance_usd: 100000 }
+    ]
+  },
+  // New Profiler endpoints
+  addressHistoricalBalances: {
+    balances: [
+      { date: '2024-01-01', balance_usd: 50000 }
+    ]
+  },
+  addressRelatedWallets: {
+    wallets: [
+      { address: '0x456', relationship: 'funding_source' }
+    ]
+  },
+  addressCounterparties: {
+    counterparties: [
+      { address: '0x789', volume_usd: 100000 }
+    ]
+  },
+  addressPnlSummary: {
+    total_pnl: 25000,
+    win_rate: 0.65
+  },
+  addressPerpPositions: {
+    positions: [
+      { token: 'BTC', side: 'long', size_usd: 50000 }
+    ]
+  },
+  addressPerpTrades: {
+    trades: [
+      { token: 'ETH', side: 'short', pnl_usd: 5000 }
+    ]
+  },
+  // New Token God Mode endpoints
+  tokenFlowIntelligence: {
+    flows: [
+      { label: 'Smart Money', net_flow_usd: 500000 }
+    ]
+  },
+  tokenTransfers: {
+    transfers: [
+      { from: '0x123', to: '0x456', amount_usd: 10000 }
+    ]
+  },
+  tokenJupDca: {
+    dcas: [
+      { address: '0x123', total_amount: 5000 }
+    ]
+  },
+  tokenPerpTrades: {
+    trades: [
+      { address: '0x123', side: 'long', pnl_usd: 10000 }
+    ]
+  },
+  tokenPerpPositions: {
+    positions: [
+      { address: '0x123', side: 'long', size_usd: 100000 }
+    ]
+  },
+  tokenPerpPnlLeaderboard: {
+    leaders: [
+      { address: '0x123', pnl_usd: 500000 }
+    ]
   }
 };
 
@@ -245,6 +312,27 @@ describe('NansenAPI', () => {
         }
       });
     });
+
+    describe('smartMoneyHistoricalHoldings', () => {
+      it('should fetch historical holdings', async () => {
+        setupMock(MOCK_RESPONSES.smartMoneyHistoricalHoldings);
+        
+        const result = await api.smartMoneyHistoricalHoldings({ chains: ['solana'] });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.holdings).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range via days', async () => {
+        setupMock(MOCK_RESPONSES.smartMoneyHistoricalHoldings);
+        
+        const result = await api.smartMoneyHistoricalHoldings({ chains: ['solana'], days: 7 });
+        
+        expect(result).toBeDefined();
+      });
+    });
   });
 
   // =================== Profiler Endpoints ===================
@@ -359,6 +447,135 @@ describe('NansenAPI', () => {
         if (!LIVE_TEST) {
           expect(result.results).toHaveLength(1);
         }
+      });
+    });
+
+    describe('addressHistoricalBalances', () => {
+      it('should fetch historical balances', async () => {
+        setupMock(MOCK_RESPONSES.addressHistoricalBalances);
+        
+        const result = await api.addressHistoricalBalances({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.balances).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.addressHistoricalBalances);
+        
+        const result = await api.addressHistoricalBalances({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum',
+          days: 7
+        });
+        
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('addressRelatedWallets', () => {
+      it('should fetch related wallets', async () => {
+        setupMock(MOCK_RESPONSES.addressRelatedWallets);
+        
+        const result = await api.addressRelatedWallets({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.wallets).toHaveLength(1);
+        }
+      });
+    });
+
+    describe('addressCounterparties', () => {
+      it('should fetch counterparties', async () => {
+        setupMock(MOCK_RESPONSES.addressCounterparties);
+        
+        const result = await api.addressCounterparties({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.counterparties).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.addressCounterparties);
+        
+        const result = await api.addressCounterparties({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum',
+          days: 14
+        });
+        
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('addressPnlSummary', () => {
+      it('should fetch PnL summary', async () => {
+        setupMock(MOCK_RESPONSES.addressPnlSummary);
+        
+        const result = await api.addressPnlSummary({
+          address: TEST_DATA.ethereum.address,
+          chain: 'ethereum'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.total_pnl).toBe(25000);
+        }
+      });
+    });
+
+    describe('addressPerpPositions', () => {
+      it('should fetch perp positions', async () => {
+        setupMock(MOCK_RESPONSES.addressPerpPositions);
+        
+        const result = await api.addressPerpPositions({
+          address: TEST_DATA.ethereum.address
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.positions).toHaveLength(1);
+        }
+      });
+    });
+
+    describe('addressPerpTrades', () => {
+      it('should fetch perp trades', async () => {
+        setupMock(MOCK_RESPONSES.addressPerpTrades);
+        
+        const result = await api.addressPerpTrades({
+          address: TEST_DATA.ethereum.address
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.trades).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.addressPerpTrades);
+        
+        const result = await api.addressPerpTrades({
+          address: TEST_DATA.ethereum.address,
+          days: 7
+        });
+        
+        expect(result).toBeDefined();
       });
     });
   });
@@ -509,6 +726,132 @@ describe('NansenAPI', () => {
           expect(result.buyers).toHaveLength(1);
           expect(result.sellers).toHaveLength(1);
         }
+      });
+    });
+
+    describe('tokenFlowIntelligence', () => {
+      it('should fetch flow intelligence', async () => {
+        setupMock(MOCK_RESPONSES.tokenFlowIntelligence);
+        
+        const result = await api.tokenFlowIntelligence({
+          tokenAddress: TEST_DATA.solana.token,
+          chain: 'solana'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.flows).toHaveLength(1);
+        }
+      });
+    });
+
+    describe('tokenTransfers', () => {
+      it('should fetch token transfers', async () => {
+        setupMock(MOCK_RESPONSES.tokenTransfers);
+        
+        const result = await api.tokenTransfers({
+          tokenAddress: TEST_DATA.solana.token,
+          chain: 'solana'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.transfers).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.tokenTransfers);
+        
+        const result = await api.tokenTransfers({
+          tokenAddress: TEST_DATA.solana.token,
+          chain: 'solana',
+          days: 3
+        });
+        
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('tokenJupDca', () => {
+      it('should fetch Jupiter DCA orders', async () => {
+        setupMock(MOCK_RESPONSES.tokenJupDca);
+        
+        const result = await api.tokenJupDca({
+          tokenAddress: TEST_DATA.solana.token
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.dcas).toHaveLength(1);
+        }
+      });
+    });
+
+    describe('tokenPerpTrades', () => {
+      it('should fetch perp trades by token symbol', async () => {
+        setupMock(MOCK_RESPONSES.tokenPerpTrades);
+        
+        const result = await api.tokenPerpTrades({
+          tokenSymbol: 'BTC'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.trades).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.tokenPerpTrades);
+        
+        const result = await api.tokenPerpTrades({
+          tokenSymbol: 'ETH',
+          days: 7
+        });
+        
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('tokenPerpPositions', () => {
+      it('should fetch perp positions by token symbol', async () => {
+        setupMock(MOCK_RESPONSES.tokenPerpPositions);
+        
+        const result = await api.tokenPerpPositions({
+          tokenSymbol: 'BTC'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.positions).toHaveLength(1);
+        }
+      });
+    });
+
+    describe('tokenPerpPnlLeaderboard', () => {
+      it('should fetch perp PnL leaderboard', async () => {
+        setupMock(MOCK_RESPONSES.tokenPerpPnlLeaderboard);
+        
+        const result = await api.tokenPerpPnlLeaderboard({
+          tokenSymbol: 'BTC'
+        });
+        
+        expect(result).toBeDefined();
+        if (!LIVE_TEST) {
+          expect(result.leaders).toHaveLength(1);
+        }
+      });
+
+      it('should support custom date range', async () => {
+        setupMock(MOCK_RESPONSES.tokenPerpPnlLeaderboard);
+        
+        const result = await api.tokenPerpPnlLeaderboard({
+          tokenSymbol: 'ETH',
+          days: 14
+        });
+        
+        expect(result).toBeDefined();
       });
     });
   });

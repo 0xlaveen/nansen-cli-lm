@@ -9,6 +9,61 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ============= Address Validation =============
+
+const ADDRESS_PATTERNS = {
+  // EVM chains: 0x followed by 40 hex chars
+  evm: /^0x[a-fA-F0-9]{40}$/,
+  // Solana: Base58, 32-44 chars (no 0, O, I, l)
+  solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+  // Bitcoin: Various formats
+  bitcoin: /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/,
+};
+
+const EVM_CHAINS = [
+  'ethereum', 'arbitrum', 'base', 'bnb', 'polygon', 'optimism',
+  'avalanche', 'linea', 'scroll', 'zksync', 'mantle', 'ronin',
+  'sei', 'plasma', 'sonic', 'unichain', 'monad', 'hyperevm', 'iotaevm'
+];
+
+/**
+ * Validate address format for a given chain
+ * @param {string} address - The address to validate
+ * @param {string} chain - The blockchain (ethereum, solana, etc.)
+ * @returns {{valid: boolean, error?: string}}
+ */
+export function validateAddress(address, chain = 'ethereum') {
+  if (!address || typeof address !== 'string') {
+    return { valid: false, error: 'Address is required' };
+  }
+
+  const trimmed = address.trim();
+  
+  if (EVM_CHAINS.includes(chain)) {
+    if (!ADDRESS_PATTERNS.evm.test(trimmed)) {
+      return { valid: false, error: `Invalid EVM address format. Expected 0x followed by 40 hex characters.` };
+    }
+  } else if (chain === 'solana') {
+    if (!ADDRESS_PATTERNS.solana.test(trimmed)) {
+      return { valid: false, error: `Invalid Solana address format. Expected Base58 string (32-44 chars).` };
+    }
+  } else if (chain === 'bitcoin') {
+    if (!ADDRESS_PATTERNS.bitcoin.test(trimmed)) {
+      return { valid: false, error: `Invalid Bitcoin address format.` };
+    }
+  }
+  // For unknown chains, allow any non-empty string (API will validate)
+  
+  return { valid: true };
+}
+
+/**
+ * Validate token address (same rules as wallet address)
+ */
+export function validateTokenAddress(tokenAddress, chain = 'solana') {
+  return validateAddress(tokenAddress, chain);
+}
+
 function loadConfig() {
   // Try config file first
   const configPath = path.join(__dirname, '..', 'config.json');
@@ -109,10 +164,27 @@ export class NansenAPI {
     });
   }
 
+  async smartMoneyHistoricalHoldings(params = {}) {
+    const { chains = ['solana'], filters = {}, orderBy, pagination, days = 30 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/smart-money/historical-holdings', {
+      chains,
+      date_range: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
   // ============= Profiler Endpoints =============
 
   async addressBalance(params = {}) {
     const { address, entityName, chain = 'ethereum', hideSpamToken = true, filters = {}, orderBy } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/profiler/address/current-balance', {
       address,
       entity_name: entityName,
@@ -125,6 +197,10 @@ export class NansenAPI {
 
   async addressLabels(params = {}) {
     const { address, chain = 'ethereum', pagination = { page: 1, recordsPerPage: 100 } } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/beta/profiler/address/labels', {
       parameters: { address, chain },
       pagination
@@ -133,6 +209,10 @@ export class NansenAPI {
 
   async addressTransactions(params = {}) {
     const { address, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/profiler/address/transactions', {
       address,
       chain,
@@ -144,6 +224,10 @@ export class NansenAPI {
 
   async addressPnl(params = {}) {
     const { address, chain = 'ethereum' } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/profiler/address/pnl-and-trade-performance', {
       address,
       chain
@@ -154,6 +238,99 @@ export class NansenAPI {
     const { query, pagination } = params;
     return this.request('/api/beta/profiler/entity-name-search', {
       parameters: { query },
+      pagination
+    });
+  }
+
+  async addressHistoricalBalances(params = {}) {
+    const { address, chain = 'ethereum', filters = {}, orderBy, pagination, days = 30 } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/profiler/address/historical-balances', {
+      address,
+      chain,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async addressRelatedWallets(params = {}) {
+    const { address, chain = 'ethereum', filters = {}, orderBy, pagination } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    return this.request('/api/v1/profiler/address/related-wallets', {
+      address,
+      chain,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async addressCounterparties(params = {}) {
+    const { address, chain = 'ethereum', filters = {}, orderBy, pagination, days = 30 } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/profiler/address/counterparties', {
+      address,
+      chain,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async addressPnlSummary(params = {}) {
+    const { address, chain = 'ethereum', filters = {}, orderBy, pagination, days = 30 } = params;
+    if (address) {
+      const validation = validateAddress(address, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/profiler/address/pnl-summary', {
+      address,
+      chain,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async addressPerpPositions(params = {}) {
+    const { address, filters = {}, orderBy, pagination } = params;
+    // Perp positions work with HL addresses (not validated)
+    return this.request('/api/v1/profiler/perp-positions', {
+      address,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async addressPerpTrades(params = {}) {
+    const { address, filters = {}, orderBy, pagination, days = 30 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/profiler/perp-trades', {
+      address,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
       pagination
     });
   }
@@ -173,6 +350,10 @@ export class NansenAPI {
 
   async tokenHolders(params = {}) {
     const { tokenAddress, chain = 'solana', labelType = 'all_holders', filters = {}, orderBy, pagination } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/tgm/holders', {
       token_address: tokenAddress,
       chain,
@@ -185,6 +366,10 @@ export class NansenAPI {
 
   async tokenFlows(params = {}) {
     const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/tgm/flows', {
       token_address: tokenAddress,
       chain,
@@ -196,6 +381,10 @@ export class NansenAPI {
 
   async tokenDexTrades(params = {}) {
     const { tokenAddress, chain = 'solana', onlySmartMoney = false, filters = {}, orderBy, pagination, days = 7 } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     const to = new Date().toISOString().split('T')[0];
     const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
@@ -217,6 +406,10 @@ export class NansenAPI {
 
   async tokenPnlLeaderboard(params = {}) {
     const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination, days = 30 } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     const to = new Date().toISOString().split('T')[0];
     const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     return this.request('/api/v1/tgm/pnl-leaderboard', {
@@ -231,9 +424,97 @@ export class NansenAPI {
 
   async tokenWhoBoughtSold(params = {}) {
     const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
     return this.request('/api/v1/tgm/who-bought-sold', {
       token_address: tokenAddress,
       chain,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenFlowIntelligence(params = {}) {
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    return this.request('/api/v1/tgm/flow-intelligence', {
+      token_address: tokenAddress,
+      chain,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenTransfers(params = {}) {
+    const { tokenAddress, chain = 'solana', filters = {}, orderBy, pagination, days = 7 } = params;
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, chain);
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/tgm/transfers', {
+      token_address: tokenAddress,
+      chain,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenJupDca(params = {}) {
+    const { tokenAddress, filters = {}, orderBy, pagination } = params;
+    // JUP DCA is Solana-only
+    if (tokenAddress) {
+      const validation = validateTokenAddress(tokenAddress, 'solana');
+      if (!validation.valid) throw new Error(validation.error);
+    }
+    return this.request('/api/v1/tgm/jup-dca', {
+      token_address: tokenAddress,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenPerpTrades(params = {}) {
+    const { tokenSymbol, filters = {}, orderBy, pagination, days = 30 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/tgm/perp-trades', {
+      token_symbol: tokenSymbol,
+      date: { from, to },
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenPerpPositions(params = {}) {
+    const { tokenSymbol, filters = {}, orderBy, pagination } = params;
+    return this.request('/api/v1/tgm/perp-positions', {
+      token_symbol: tokenSymbol,
+      filters,
+      order_by: orderBy,
+      pagination
+    });
+  }
+
+  async tokenPerpPnlLeaderboard(params = {}) {
+    const { tokenSymbol, filters = {}, orderBy, pagination, days = 30 } = params;
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return this.request('/api/v1/tgm/perp-pnl-leaderboard', {
+      token_symbol: tokenSymbol,
+      date: { from, to },
       filters,
       order_by: orderBy,
       pagination

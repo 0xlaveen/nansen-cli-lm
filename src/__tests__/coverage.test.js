@@ -15,8 +15,7 @@ const DOCUMENTED_ENDPOINTS = {
     { name: 'dex-trades', method: 'smartMoneyDexTrades', endpoint: '/api/v1/smart-money/dex-trades' },
     { name: 'dcas', method: 'smartMoneyDcas', endpoint: '/api/v1/smart-money/dcas' },
     { name: 'perp-trades', method: 'smartMoneyPerpTrades', endpoint: '/api/v1/smart-money/perp-trades' },
-    // Not yet implemented:
-    // { name: 'historical-holdings', method: 'smartMoneyHistoricalHoldings', endpoint: '/api/v1/smart-money/historical-holdings' },
+    { name: 'historical-holdings', method: 'smartMoneyHistoricalHoldings', endpoint: '/api/v1/smart-money/historical-holdings' },
   ],
   profiler: [
     { name: 'balance', method: 'addressBalance', endpoint: '/api/v1/profiler/address/current-balance' },
@@ -24,13 +23,12 @@ const DOCUMENTED_ENDPOINTS = {
     { name: 'transactions', method: 'addressTransactions', endpoint: '/api/v1/profiler/address/transactions' },
     { name: 'pnl', method: 'addressPnl', endpoint: '/api/v1/profiler/address/pnl-and-trade-performance' },
     { name: 'search', method: 'entitySearch', endpoint: '/api/beta/profiler/entity-name-search' },
-    // Not yet implemented:
-    // { name: 'historical-balances', method: 'addressHistoricalBalances', endpoint: '/api/v1/profiler/address/historical-balances' },
-    // { name: 'perp-positions', method: 'addressPerpPositions', endpoint: '/api/v1/profiler/perp-positions' },
-    // { name: 'perp-trades', method: 'addressPerpTrades', endpoint: '/api/v1/profiler/perp-trades' },
-    // { name: 'related-wallets', method: 'addressRelatedWallets', endpoint: '/api/v1/profiler/address/related-wallets' },
-    // { name: 'pnl-summary', method: 'addressPnlSummary', endpoint: '/api/v1/profiler/address/pnl-summary' },
-    // { name: 'counterparties', method: 'addressCounterparties', endpoint: '/api/v1/profiler/address/counterparties' },
+    { name: 'historical-balances', method: 'addressHistoricalBalances', endpoint: '/api/v1/profiler/address/historical-balances' },
+    { name: 'related-wallets', method: 'addressRelatedWallets', endpoint: '/api/v1/profiler/address/related-wallets' },
+    { name: 'counterparties', method: 'addressCounterparties', endpoint: '/api/v1/profiler/address/counterparties' },
+    { name: 'pnl-summary', method: 'addressPnlSummary', endpoint: '/api/v1/profiler/address/pnl-summary' },
+    { name: 'perp-positions', method: 'addressPerpPositions', endpoint: '/api/v1/profiler/perp-positions' },
+    { name: 'perp-trades', method: 'addressPerpTrades', endpoint: '/api/v1/profiler/perp-trades' },
   ],
   tokenGodMode: [
     { name: 'screener', method: 'tokenScreener', endpoint: '/api/v1/token-screener' },
@@ -39,40 +37,23 @@ const DOCUMENTED_ENDPOINTS = {
     { name: 'dex-trades', method: 'tokenDexTrades', endpoint: '/api/v1/tgm/dex-trades' },
     { name: 'pnl-leaderboard', method: 'tokenPnlLeaderboard', endpoint: '/api/v1/tgm/pnl-leaderboard' },
     { name: 'who-bought-sold', method: 'tokenWhoBoughtSold', endpoint: '/api/v1/tgm/who-bought-sold' },
-    // Not yet implemented:
-    // { name: 'perp-screener', method: 'tokenPerpScreener', endpoint: '/api/v1/tgm/perp-screener' },
-    // { name: 'flow-intelligence', method: 'tokenFlowIntelligence', endpoint: '/api/v1/tgm/flow-intelligence' },
-    // { name: 'transfers', method: 'tokenTransfers', endpoint: '/api/v1/tgm/transfers' },
-    // { name: 'jup-dca', method: 'tokenJupDca', endpoint: '/api/v1/tgm/jup-dca' },
-    // { name: 'perp-trades', method: 'tokenPerpTrades', endpoint: '/api/v1/tgm/perp-trades' },
-    // { name: 'perp-positions', method: 'tokenPerpPositions', endpoint: '/api/v1/tgm/perp-positions' },
-    // { name: 'perp-pnl-leaderboard', method: 'tokenPerpPnlLeaderboard', endpoint: '/api/v1/tgm/perp-pnl-leaderboard' },
+    { name: 'flow-intelligence', method: 'tokenFlowIntelligence', endpoint: '/api/v1/tgm/flow-intelligence' },
+    { name: 'transfers', method: 'tokenTransfers', endpoint: '/api/v1/tgm/transfers' },
+    { name: 'jup-dca', method: 'tokenJupDca', endpoint: '/api/v1/tgm/jup-dca' },
+    { name: 'perp-trades', method: 'tokenPerpTrades', endpoint: '/api/v1/tgm/perp-trades' },
+    { name: 'perp-positions', method: 'tokenPerpPositions', endpoint: '/api/v1/tgm/perp-positions' },
+    { name: 'perp-pnl-leaderboard', method: 'tokenPerpPnlLeaderboard', endpoint: '/api/v1/tgm/perp-pnl-leaderboard' },
   ],
   portfolio: [
     { name: 'defi-holdings', method: 'portfolioDefiHoldings', endpoint: '/api/v1/portfolio/defi-holdings' },
   ],
 };
 
-// Endpoints that are documented but not yet implemented
+// Endpoints that are documented but return 404 (confirmed non-existent)
 const NOT_IMPLEMENTED = [
-  // Smart Money
-  'smartMoneyHistoricalHoldings',
-  // Profiler
-  'addressHistoricalBalances',
-  'addressPerpPositions',
-  'addressPerpTrades',
-  'addressRelatedWallets',
-  'addressPnlSummary',
-  'addressCounterparties',
-  'perpLeaderboard',
-  // Token God Mode
-  'tokenPerpScreener',
-  'tokenFlowIntelligence',
-  'tokenTransfers',
-  'tokenJupDca',
-  'tokenPerpTrades',
-  'tokenPerpPositions',
-  'tokenPerpPnlLeaderboard',
+  // These endpoints return 404 and should NOT be implemented
+  // 'perpLeaderboard' - Profiler perp-leaderboard returns 404
+  // 'tokenPerpScreener' - TGM perp-screener returns 404
 ];
 
 describe('API Endpoint Coverage', () => {

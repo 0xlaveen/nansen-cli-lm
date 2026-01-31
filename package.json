@@ -14,11 +14,18 @@
     "test:coverage": "vitest run --coverage",
     "test:live": "NANSEN_LIVE_TEST=1 vitest run"
   },
-  "keywords": ["nansen", "crypto", "blockchain", "api", "cli", "ai-agent"],
+  "keywords": [
+    "nansen",
+    "crypto",
+    "blockchain",
+    "api",
+    "cli",
+    "ai-agent"
+  ],
   "author": "Nansen",
   "license": "MIT",
   "devDependencies": {
-    "vitest": "^1.6.0",
-    "@vitest/coverage-v8": "^1.6.0"
+    "@vitest/coverage-v8": "^4.0.18",
+    "vitest": "^4.0.18"
   }
 }

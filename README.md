@@ -75,6 +75,7 @@ Track trading and holding activity of sophisticated market participants.
 | `perp-trades` | Perpetual trading on Hyperliquid |
 | `holdings` | Aggregated token balances |
 | `dcas` | DCA strategies on Jupiter |
+| `historical-holdings` | Historical holdings over time (use `--days`) |
 
 **Smart Money Labels:**
 - `Fund` - Institutional investment funds
@@ -95,6 +96,12 @@ Detailed information about any blockchain address.
 | `transactions` | Transaction history |
 | `pnl` | PnL and trade performance |
 | `search` | Search for entities by name |
+| `historical-balances` | Historical balances over time (use `--days`) |
+| `related-wallets` | Find wallets related to an address |
+| `counterparties` | Top counterparties by volume (use `--days`) |
+| `pnl-summary` | Summarized PnL metrics (use `--days`) |
+| `perp-positions` | Current perpetual positions |
+| `perp-trades` | Perpetual trading history (use `--days`) |
 
 ### `token` - Token God Mode
 
@@ -104,10 +111,16 @@ Deep analytics for any token.
 |------------|-------------|
 | `screener` | Discover and filter tokens |
 | `holders` | Token holder analysis |
-| `flows` | Token flow intelligence |
-| `dex-trades` | DEX trading activity |
-| `pnl` | PnL leaderboard |
+| `flows` | Token flow metrics |
+| `dex-trades` | DEX trading activity (use `--days`) |
+| `pnl` | PnL leaderboard (use `--days`) |
 | `who-bought-sold` | Recent buyers and sellers |
+| `flow-intelligence` | Detailed flow intelligence by label |
+| `transfers` | Token transfer history (use `--days`) |
+| `jup-dca` | Jupiter DCA orders for token |
+| `perp-trades` | Perp trades by token symbol (use `--symbol`, `--days`) |
+| `perp-positions` | Open perp positions by token symbol (use `--symbol`) |
+| `perp-pnl-leaderboard` | Perp PnL leaderboard by token (use `--symbol`, `--days`) |
 
 ### `portfolio` - Portfolio Analytics
 
@@ -130,6 +143,8 @@ Track DeFi positions and holdings.
 | `--labels <label>` | Smart Money label filter |
 | `--smart-money` | Filter for Smart Money only |
 | `--timeframe <tf>` | Time window (5m, 10m, 1h, 6h, 24h, 7d, 30d) |
+| `--days <n>` | Date range in days (default: 30 for most endpoints) |
+| `--symbol <sym>` | Token symbol (for perp endpoints, e.g., BTC, ETH) |
 
 ## Supported Chains
 
@@ -185,11 +200,11 @@ npm run test:watch
 
 | Category | Implemented | Total | Coverage |
 |----------|-------------|-------|----------|
-| Smart Money | 5 | 6 | 83% |
-| Profiler | 5 | 12 | 42% |
-| Token God Mode | 6 | 13 | 46% |
+| Smart Money | 6 | 6 | 100% |
+| Profiler | 11 | 11 | 100% |
+| Token God Mode | 12 | 12 | 100% |
 | Portfolio | 1 | 1 | 100% |
-| **Total** | **17** | **32** | **53%** |
+| **Total** | **30** | **30** | **100%** |
 
 ### Test Structure
 

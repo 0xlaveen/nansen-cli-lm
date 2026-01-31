@@ -75,9 +75,9 @@ USAGE:
   nansen <command> [subcommand] [options]
 
 COMMANDS:
-  smart-money    Smart Money analytics (netflow, dex-trades, holdings, dcas)
-  profiler       Wallet profiling (balance, labels, transactions, pnl)
-  token          Token God Mode (screener, holders, flows, trades, pnl)
+  smart-money    Smart Money analytics (netflow, dex-trades, holdings, dcas, historical-holdings)
+  profiler       Wallet profiling (balance, labels, transactions, pnl, perp-positions, perp-trades)
+  token          Token God Mode (screener, holders, flows, trades, pnl, perp-trades, perp-positions)
   portfolio      Portfolio analytics (defi-holdings)
   help           Show this help message
 
@@ -88,6 +88,8 @@ GLOBAL OPTIONS:
   --limit        Number of results (shorthand for pagination)
   --filters      JSON object with filters
   --order-by     JSON array with sort order
+  --days         Date range in days (default: 30 for most endpoints)
+  --symbol       Token symbol (for perp endpoints)
 
 EXAMPLES:
   # Get Smart Money netflow on Solana
@@ -141,14 +143,17 @@ const commands = {
         : [options.labels];
     }
 
+    const days = options.days ? parseInt(options.days) : 30;
+
     const handlers = {
       'netflow': () => api.smartMoneyNetflow({ chains, filters, orderBy, pagination }),
       'dex-trades': () => api.smartMoneyDexTrades({ chains, filters, orderBy, pagination }),
       'perp-trades': () => api.smartMoneyPerpTrades({ filters, orderBy, pagination }),
       'holdings': () => api.smartMoneyHoldings({ chains, filters, orderBy, pagination }),
       'dcas': () => api.smartMoneyDcas({ filters, orderBy, pagination }),
+      'historical-holdings': () => api.smartMoneyHistoricalHoldings({ chains, filters, orderBy, pagination, days }),
       'help': () => ({
-        commands: ['netflow', 'dex-trades', 'perp-trades', 'holdings', 'dcas'],
+        commands: ['netflow', 'dex-trades', 'perp-trades', 'holdings', 'dcas', 'historical-holdings'],
         description: 'Smart Money analytics endpoints',
         example: 'nansen smart-money netflow --chain solana --labels Fund'
       })
@@ -169,6 +174,7 @@ const commands = {
     const filters = options.filters || {};
     const orderBy = options['order-by'];
     const pagination = options.limit ? { page: 1, recordsPerPage: options.limit } : undefined;
+    const days = options.days ? parseInt(options.days) : 30;
 
     const handlers = {
       'balance': () => api.addressBalance({ address, entityName, chain, filters, orderBy }),
@@ -176,8 +182,14 @@ const commands = {
       'transactions': () => api.addressTransactions({ address, chain, filters, orderBy, pagination }),
       'pnl': () => api.addressPnl({ address, chain }),
       'search': () => api.entitySearch({ query: options.query, pagination }),
+      'historical-balances': () => api.addressHistoricalBalances({ address, chain, filters, orderBy, pagination, days }),
+      'related-wallets': () => api.addressRelatedWallets({ address, chain, filters, orderBy, pagination }),
+      'counterparties': () => api.addressCounterparties({ address, chain, filters, orderBy, pagination, days }),
+      'pnl-summary': () => api.addressPnlSummary({ address, chain, filters, orderBy, pagination, days }),
+      'perp-positions': () => api.addressPerpPositions({ address, filters, orderBy, pagination }),
+      'perp-trades': () => api.addressPerpTrades({ address, filters, orderBy, pagination, days }),
       'help': () => ({
-        commands: ['balance', 'labels', 'transactions', 'pnl', 'search'],
+        commands: ['balance', 'labels', 'transactions', 'pnl', 'search', 'historical-balances', 'related-wallets', 'counterparties', 'pnl-summary', 'perp-positions', 'perp-trades'],
         description: 'Wallet profiling endpoints',
         example: 'nansen profiler balance --address 0x123... --chain ethereum'
       })
@@ -193,12 +205,14 @@ const commands = {
   'token': async (args, api, flags, options) => {
     const subcommand = args[0] || 'help';
     const tokenAddress = options.token || options['token-address'];
+    const tokenSymbol = options.symbol || options['token-symbol'];
     const chain = options.chain || 'solana';
     const chains = options.chains || [chain];
     const timeframe = options.timeframe || '24h';
     const filters = options.filters || {};
     const orderBy = options['order-by'];
     const pagination = options.limit ? { page: 1, per_page: options.limit } : undefined;
+    const days = options.days ? parseInt(options.days) : 30;
 
     // Convenience filter for smart money only
     const onlySmartMoney = options['smart-money'] || flags['smart-money'] || false;
@@ -210,11 +224,17 @@ const commands = {
       'screener': () => api.tokenScreener({ chains, timeframe, filters, orderBy, pagination }),
       'holders': () => api.tokenHolders({ tokenAddress, chain, filters, orderBy, pagination }),
       'flows': () => api.tokenFlows({ tokenAddress, chain, filters, orderBy, pagination }),
-      'dex-trades': () => api.tokenDexTrades({ tokenAddress, chain, onlySmartMoney, filters, orderBy, pagination }),
-      'pnl': () => api.tokenPnlLeaderboard({ tokenAddress, chain, filters, orderBy, pagination }),
+      'dex-trades': () => api.tokenDexTrades({ tokenAddress, chain, onlySmartMoney, filters, orderBy, pagination, days }),
+      'pnl': () => api.tokenPnlLeaderboard({ tokenAddress, chain, filters, orderBy, pagination, days }),
       'who-bought-sold': () => api.tokenWhoBoughtSold({ tokenAddress, chain, filters, orderBy, pagination }),
+      'flow-intelligence': () => api.tokenFlowIntelligence({ tokenAddress, chain, filters, orderBy, pagination }),
+      'transfers': () => api.tokenTransfers({ tokenAddress, chain, filters, orderBy, pagination, days }),
+      'jup-dca': () => api.tokenJupDca({ tokenAddress, filters, orderBy, pagination }),
+      'perp-trades': () => api.tokenPerpTrades({ tokenSymbol, filters, orderBy, pagination, days }),
+      'perp-positions': () => api.tokenPerpPositions({ tokenSymbol, filters, orderBy, pagination }),
+      'perp-pnl-leaderboard': () => api.tokenPerpPnlLeaderboard({ tokenSymbol, filters, orderBy, pagination, days }),
       'help': () => ({
-        commands: ['screener', 'holders', 'flows', 'dex-trades', 'pnl', 'who-bought-sold'],
+        commands: ['screener', 'holders', 'flows', 'dex-trades', 'pnl', 'who-bought-sold', 'flow-intelligence', 'transfers', 'jup-dca', 'perp-trades', 'perp-positions', 'perp-pnl-leaderboard'],
         description: 'Token God Mode endpoints',
         example: 'nansen token screener --chain solana --timeframe 24h --smart-money'
       })

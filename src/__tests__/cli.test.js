@@ -57,6 +57,7 @@ describe('CLI', () => {
       expect(stdout).toContain('netflow');
       expect(stdout).toContain('dex-trades');
       expect(stdout).toContain('holdings');
+      expect(stdout).toContain('historical-holdings');
     });
 
     it('should show profiler help', () => {
@@ -66,6 +67,12 @@ describe('CLI', () => {
       expect(stdout).toContain('balance');
       expect(stdout).toContain('labels');
       expect(stdout).toContain('transactions');
+      expect(stdout).toContain('historical-balances');
+      expect(stdout).toContain('related-wallets');
+      expect(stdout).toContain('counterparties');
+      expect(stdout).toContain('pnl-summary');
+      expect(stdout).toContain('perp-positions');
+      expect(stdout).toContain('perp-trades');
     });
 
     it('should show token help', () => {
@@ -75,6 +82,12 @@ describe('CLI', () => {
       expect(stdout).toContain('screener');
       expect(stdout).toContain('holders');
       expect(stdout).toContain('flows');
+      expect(stdout).toContain('flow-intelligence');
+      expect(stdout).toContain('transfers');
+      expect(stdout).toContain('jup-dca');
+      expect(stdout).toContain('perp-trades');
+      expect(stdout).toContain('perp-positions');
+      expect(stdout).toContain('perp-pnl-leaderboard');
     });
   });
 
@@ -216,6 +229,16 @@ describe('CLI', () => {
       const { stdout, stderr } = runCLI('smart-money dex-trades --chain solana --labels Fund');
       expect(stdout + stderr).toBeDefined();
     });
+
+    it('should support smart-money historical-holdings', () => {
+      const { stdout, stderr } = runCLI('smart-money historical-holdings --chain solana');
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support --days option', () => {
+      const { stdout, stderr } = runCLI('smart-money historical-holdings --chain solana --days 7');
+      expect(stdout + stderr).toBeDefined();
+    });
   });
 
   // =================== Profiler Commands ===================
@@ -245,6 +268,41 @@ describe('CLI', () => {
 
     it('should support profiler search', () => {
       const { stdout, stderr } = runCLI('profiler search --query "Vitalik"');
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler historical-balances', () => {
+      const { stdout, stderr } = runCLI(`profiler historical-balances --address ${TEST_ADDRESS} --chain ethereum`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler related-wallets', () => {
+      const { stdout, stderr } = runCLI(`profiler related-wallets --address ${TEST_ADDRESS} --chain ethereum`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler counterparties', () => {
+      const { stdout, stderr } = runCLI(`profiler counterparties --address ${TEST_ADDRESS} --chain ethereum`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler pnl-summary', () => {
+      const { stdout, stderr } = runCLI(`profiler pnl-summary --address ${TEST_ADDRESS} --chain ethereum`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler perp-positions', () => {
+      const { stdout, stderr } = runCLI(`profiler perp-positions --address ${TEST_ADDRESS}`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support profiler perp-trades', () => {
+      const { stdout, stderr } = runCLI(`profiler perp-trades --address ${TEST_ADDRESS}`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support --days option for profiler', () => {
+      const { stdout, stderr } = runCLI(`profiler historical-balances --address ${TEST_ADDRESS} --chain ethereum --days 14`);
       expect(stdout + stderr).toBeDefined();
     });
   });
@@ -286,6 +344,41 @@ describe('CLI', () => {
 
     it('should support --smart-money flag', () => {
       const { stdout, stderr } = runCLI(`token dex-trades --token ${TEST_TOKEN} --chain solana --smart-money`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token flow-intelligence', () => {
+      const { stdout, stderr } = runCLI(`token flow-intelligence --token ${TEST_TOKEN} --chain solana`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token transfers', () => {
+      const { stdout, stderr } = runCLI(`token transfers --token ${TEST_TOKEN} --chain solana`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token jup-dca', () => {
+      const { stdout, stderr } = runCLI(`token jup-dca --token ${TEST_TOKEN}`);
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token perp-trades with --symbol', () => {
+      const { stdout, stderr } = runCLI('token perp-trades --symbol BTC');
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token perp-positions with --symbol', () => {
+      const { stdout, stderr } = runCLI('token perp-positions --symbol ETH');
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support token perp-pnl-leaderboard with --symbol', () => {
+      const { stdout, stderr } = runCLI('token perp-pnl-leaderboard --symbol BTC');
+      expect(stdout + stderr).toBeDefined();
+    });
+
+    it('should support --days option for token commands', () => {
+      const { stdout, stderr } = runCLI(`token transfers --token ${TEST_TOKEN} --chain solana --days 3`);
       expect(stdout + stderr).toBeDefined();
     });
   });
