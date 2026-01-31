@@ -1,5 +1,5 @@
 {
-  "name": "@nansen/cli",
+  "name": "nansen-cli",
   "version": "1.0.0",
   "description": "Command-line interface for Nansen API - designed for AI agents",
   "main": "src/index.js",

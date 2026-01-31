@@ -1,6 +1,6 @@
 # Nansen CLI
 
-[![npm version](https://img.shields.io/npm/v/@nansen/cli.svg)](https://www.npmjs.com/package/@nansen/cli)
+[![npm version](https://img.shields.io/npm/v/nansen-cli.svg)](https://www.npmjs.com/package/nansen-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen.svg)]()
 
@@ -10,10 +10,10 @@ Command-line interface for the [Nansen API](https://docs.nansen.ai). Designed fo
 
 ```bash
 # Install globally via npm
-npm install -g @nansen/cli
+npm install -g nansen-cli
 
 # Or run directly with npx
-npx @nansen/cli help
+npx nansen-cli help
 
 # Or clone and install locally
 git clone https://github.com/nansen-ai/nansen-cli.git
