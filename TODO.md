@@ -2,13 +2,6 @@
 
 > **Built by agents, for agents.** We prioritize improvements that create the best possible AI agent experience.
 
-## P1 - Should Have
-
-### Streaming Output
-- [ ] `--stream` flag for large result sets
-- [ ] Output as JSON lines (newline-delimited JSON)
-- [ ] Enable incremental processing by agents
-
 ## P2 - Nice to Have
 
 ### Test Coverage Gaps

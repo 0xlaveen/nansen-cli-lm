@@ -278,7 +278,7 @@ export function parseArgs(args) {
       const key = arg.slice(2);
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache') {
+      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache' || key === 'stream') {
         result.flags[key] = true;
       } else if (next && !next.startsWith('-')) {
         // Try to parse as JSON first
@@ -411,6 +411,34 @@ export function formatError(error) {
   };
 }
 
+/**
+ * Format data as JSON lines (NDJSON) for streaming output
+ * Each record is output as a separate JSON line
+ */
+export function formatStream(data) {
+  // Extract array of records from various response shapes
+  let records = [];
+  if (Array.isArray(data)) {
+    records = data;
+  } else if (data?.data && Array.isArray(data.data)) {
+    records = data.data;
+  } else if (data?.results && Array.isArray(data.results)) {
+    records = data.results;
+  } else if (data?.data?.results && Array.isArray(data.data.results)) {
+    records = data.data.results;
+  } else if (typeof data === 'object' && data !== null) {
+    // Single object - output as single line
+    records = [data];
+  }
+
+  if (records.length === 0) {
+    return '';
+  }
+
+  // Output each record as a separate JSON line
+  return records.map(record => JSON.stringify(record)).join('\n');
+}
+
 // Parse simple sort syntax: "field:direction" or "field" (defaults to DESC)
 export function parseSort(sortOption, orderByOption) {
   // If --order-by is provided, use it (full JSON control)
@@ -463,6 +491,7 @@ GLOBAL OPTIONS:
   --cache        Enable response caching (default: off)
   --no-cache     Disable cache for this request
   --cache-ttl <s> Cache TTL in seconds (default: 300)
+  --stream       Output as JSON lines (NDJSON) for incremental processing
 
 EXAMPLES:
   # Get Smart Money netflow on Solana
@@ -814,6 +843,7 @@ export async function runCLI(rawArgs, deps = {}) {
   const subArgs = positional.slice(1);
   const pretty = flags.pretty || flags.p;
   const table = flags.table || flags.t;
+  const stream = flags.stream || flags.s;
 
   const commands = { ...buildCommands(deps), ...commandOverrides };
 
@@ -866,6 +896,16 @@ export async function runCLI(rawArgs, deps = {}) {
     const fields = parseFields(options.fields);
     if (fields) {
       result = filterFields(result, fields);
+    }
+    
+    // Output in requested format
+    if (stream) {
+      // Stream mode: output each record as a JSON line (NDJSON)
+      const streamOutput = formatStream(result);
+      if (streamOutput) {
+        output(streamOutput);
+      }
+      return { type: 'stream', data: result };
     }
     
     const successData = { success: true, data: result };

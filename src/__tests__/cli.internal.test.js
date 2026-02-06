@@ -11,6 +11,7 @@ import {
   formatTable,
   formatOutput,
   formatError,
+  formatStream,
   parseSort,
   buildCommands,
   runCLI,
@@ -1506,5 +1507,159 @@ describe('--cache flag integration', () => {
     await runCLI(['smart-money', 'netflow'], deps);
     
     expect(capturedOptions.cache.enabled).toBeFalsy();
+  });
+});
+
+// =================== Streaming Output (NDJSON) ===================
+
+describe('formatStream', () => {
+  it('should output array as JSON lines', () => {
+    const data = [
+      { symbol: 'SOL', value: 100 },
+      { symbol: 'ETH', value: 200 },
+      { symbol: 'BTC', value: 300 }
+    ];
+    const result = formatStream(data);
+    const lines = result.split('\n');
+    
+    expect(lines).toHaveLength(3);
+    expect(JSON.parse(lines[0])).toEqual({ symbol: 'SOL', value: 100 });
+    expect(JSON.parse(lines[1])).toEqual({ symbol: 'ETH', value: 200 });
+    expect(JSON.parse(lines[2])).toEqual({ symbol: 'BTC', value: 300 });
+  });
+
+  it('should extract data from nested response', () => {
+    const response = {
+      data: [
+        { token: 'A' },
+        { token: 'B' }
+      ]
+    };
+    const result = formatStream(response);
+    const lines = result.split('\n');
+    
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[0]).token).toBe('A');
+  });
+
+  it('should extract from results field', () => {
+    const response = {
+      results: [{ id: 1 }, { id: 2 }]
+    };
+    const result = formatStream(response);
+    const lines = result.split('\n');
+    
+    expect(lines).toHaveLength(2);
+  });
+
+  it('should extract from nested data.results', () => {
+    const response = {
+      data: {
+        results: [{ x: 1 }]
+      }
+    };
+    const result = formatStream(response);
+    expect(JSON.parse(result).x).toBe(1);
+  });
+
+  it('should handle single object', () => {
+    const data = { single: true, value: 42 };
+    const result = formatStream(data);
+    
+    expect(JSON.parse(result)).toEqual({ single: true, value: 42 });
+  });
+
+  it('should return empty string for empty array', () => {
+    expect(formatStream([])).toBe('');
+  });
+
+  it('should handle null/undefined', () => {
+    expect(formatStream(null)).toBe('');
+    expect(formatStream(undefined)).toBe('');
+  });
+});
+
+describe('--stream flag integration', () => {
+  let outputs;
+  let exitCode;
+
+  const mockDeps = () => ({
+    output: (msg) => outputs.push(msg),
+    errorOutput: (msg) => outputs.push(msg),
+    exit: (code) => { exitCode = code; }
+  });
+
+  beforeEach(() => {
+    outputs = [];
+    exitCode = null;
+  });
+
+  it('should output NDJSON when --stream flag used', async () => {
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI() {
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue([
+          { symbol: 'SOL', value: 100 },
+          { symbol: 'ETH', value: 200 }
+        ]);
+      }
+    };
+    
+    const result = await runCLI(['smart-money', 'netflow', '--stream'], deps);
+    
+    expect(result.type).toBe('stream');
+    const lines = outputs[0].split('\n');
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[0]).symbol).toBe('SOL');
+    expect(JSON.parse(lines[1]).symbol).toBe('ETH');
+  });
+
+  it('should work with nested API response', async () => {
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI() {
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue({
+          data: [{ token: 'ABC' }, { token: 'XYZ' }]
+        });
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--stream'], deps);
+    
+    const lines = outputs[0].split('\n');
+    expect(lines).toHaveLength(2);
+  });
+
+  it('should apply field filtering before streaming', async () => {
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI() {
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue([
+          { symbol: 'SOL', value: 100, extra: 'ignored' }
+        ]);
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--stream', '--fields', 'symbol'], deps);
+    
+    const record = JSON.parse(outputs[0]);
+    expect(record.symbol).toBe('SOL');
+    expect(record.extra).toBeUndefined();
+  });
+
+  it('should not wrap in success envelope', async () => {
+    const deps = {
+      ...mockDeps(),
+      NansenAPIClass: function MockAPI() {
+        this.smartMoneyNetflow = vi.fn().mockResolvedValue([{ a: 1 }]);
+      }
+    };
+    
+    await runCLI(['smart-money', 'netflow', '--stream'], deps);
+    
+    // Stream output should NOT have success wrapper
+    const record = JSON.parse(outputs[0]);
+    expect(record.success).toBeUndefined();
+    expect(record.a).toBe(1);
   });
 });
