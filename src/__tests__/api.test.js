@@ -196,6 +196,8 @@ describe('NansenAPI', () => {
     if (mockFetch) {
       mockFetch.mockClear();
     }
+    // Always restore real timers (safety net if test fails mid-execution)
+    vi.useRealTimers();
   });
 
   afterAll(() => {
