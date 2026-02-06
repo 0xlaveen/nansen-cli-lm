@@ -9,7 +9,7 @@ import * as readline from 'readline';
 // ============= Schema Definition =============
 
 export const SCHEMA = {
-  version: '1.0.0',
+  version: '1.1.0',
   commands: {
     'smart-money': {
       description: 'Smart Money analytics - track sophisticated market participants',
