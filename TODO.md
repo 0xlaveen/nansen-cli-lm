@@ -4,11 +4,12 @@
 
 ## High Priority
 
-### Rate Limit Handling
-- [ ] Auto-detect 429 responses
-- [ ] Implement exponential backoff with jitter
-- [ ] Add `--retry` flag (or make it default)
-- [ ] Surface rate limit headers in response metadata
+### ~~Rate Limit Handling~~ ✅
+- [x] Auto-detect 429 responses
+- [x] Implement exponential backoff with jitter
+- [x] Retry enabled by default (3 attempts), `--no-retry` to disable
+- [x] Parse and respect `retry-after` headers
+- [x] Retry on 429, 500, 502, 503, 504 and network errors
 
 ### ~~Structured Error Codes~~ ✅
 - [x] Define error code enum: `RATE_LIMITED`, `INVALID_ADDRESS`, `TOKEN_NOT_FOUND`, `UNAUTHORIZED`, `INVALID_CHAIN`, etc.

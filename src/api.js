@@ -235,8 +235,61 @@ function loadConfig() {
 
 const config = loadConfig();
 
+// ============= Retry Configuration =============
+
+const DEFAULT_RETRY_OPTIONS = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 30000,
+  retryOnStatus: [429, 500, 502, 503, 504],
+};
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ */
+function calculateBackoff(attempt, baseDelayMs, maxDelayMs, retryAfterMs = null) {
+  // If server specifies retry-after, use it (with some jitter)
+  if (retryAfterMs) {
+    const jitter = Math.random() * 1000;
+    return Math.min(retryAfterMs + jitter, maxDelayMs);
+  }
+  
+  // Exponential backoff: base * 2^attempt + random jitter
+  const exponentialDelay = baseDelayMs * Math.pow(2, attempt);
+  const jitter = Math.random() * baseDelayMs;
+  return Math.min(exponentialDelay + jitter, maxDelayMs);
+}
+
+/**
+ * Parse retry-after header (supports seconds or HTTP date)
+ */
+function parseRetryAfter(headerValue) {
+  if (!headerValue) return null;
+  
+  // Try parsing as seconds
+  const seconds = parseInt(headerValue, 10);
+  if (!isNaN(seconds)) {
+    return seconds * 1000;
+  }
+  
+  // Try parsing as HTTP date
+  const date = new Date(headerValue);
+  if (!isNaN(date.getTime())) {
+    return Math.max(0, date.getTime() - Date.now());
+  }
+  
+  return null;
+}
+
 export class NansenAPI {
-  constructor(apiKey = config.apiKey, baseUrl = config.baseUrl) {
+  constructor(apiKey = config.apiKey, baseUrl = config.baseUrl, options = {}) {
     if (!apiKey) {
       throw new NansenError(
         'API key required. Run `nansen login` or set NANSEN_API_KEY environment variable.',
@@ -245,52 +298,96 @@ export class NansenAPI {
     }
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
+    this.retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...options.retry };
   }
 
   async request(endpoint, body = {}, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const { maxRetries, baseDelayMs, maxDelayMs, retryOnStatus } = this.retryOptions;
+    const shouldRetry = options.retry !== false; // Allow disabling retry per-request
     
-    let response;
-    try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.apiKey,
-          ...options.headers
-        },
-        body: JSON.stringify(body)
-      });
-    } catch (err) {
-      // Network-level errors (DNS, connection refused, etc.)
-      throw new NansenError(
-        `Network error: ${err.message}`,
-        ErrorCode.NETWORK_ERROR,
-        null,
-        { originalError: err.message }
-      );
-    }
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': this.apiKey,
+            ...options.headers
+          },
+          body: JSON.stringify(body)
+        });
+      } catch (err) {
+        // Network-level errors - retry these too
+        lastError = new NansenError(
+          `Network error: ${err.message}`,
+          ErrorCode.NETWORK_ERROR,
+          null,
+          { originalError: err.message, attempt: attempt + 1 }
+        );
+        
+        if (shouldRetry && attempt < maxRetries) {
+          const delayMs = calculateBackoff(attempt, baseDelayMs, maxDelayMs);
+          await sleep(delayMs);
+          continue;
+        }
+        throw lastError;
+      }
 
-    let data;
-    try {
-      data = await response.json();
-    } catch (err) {
-      // Non-JSON response (rare, usually server errors)
-      throw new NansenError(
-        `Invalid response from API (status ${response.status})`,
-        response.status >= 500 ? ErrorCode.SERVER_ERROR : ErrorCode.UNKNOWN,
-        response.status,
-        { body: await response.text().catch(() => null) }
-      );
-    }
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        // Non-JSON response (rare, usually server errors)
+        const error = new NansenError(
+          `Invalid response from API (status ${response.status})`,
+          response.status >= 500 ? ErrorCode.SERVER_ERROR : ErrorCode.UNKNOWN,
+          response.status,
+          { body: await response.text().catch(() => null), attempt: attempt + 1 }
+        );
+        
+        if (shouldRetry && attempt < maxRetries && response.status >= 500) {
+          const delayMs = calculateBackoff(attempt, baseDelayMs, maxDelayMs);
+          await sleep(delayMs);
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
 
-    if (!response.ok) {
-      const message = data.message || data.error || `API error: ${response.status}`;
-      const code = statusToErrorCode(response.status, data);
-      throw new NansenError(message, code, response.status, data);
-    }
+      if (!response.ok) {
+        const message = data.message || data.error || `API error: ${response.status}`;
+        const code = statusToErrorCode(response.status, data);
+        const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+        
+        lastError = new NansenError(message, code, response.status, {
+          ...data,
+          attempt: attempt + 1,
+          retryAfterMs
+        });
+        
+        // Retry on specific status codes
+        if (shouldRetry && attempt < maxRetries && retryOnStatus.includes(response.status)) {
+          const delayMs = calculateBackoff(attempt, baseDelayMs, maxDelayMs, retryAfterMs);
+          await sleep(delayMs);
+          continue;
+        }
+        
+        throw lastError;
+      }
 
-    return data;
+      // Success - add retry metadata if we retried
+      if (attempt > 0) {
+        data._meta = { ...(data._meta || {}), retriedAttempts: attempt };
+      }
+      return data;
+    }
+    
+    // Should not reach here, but just in case
+    throw lastError;
   }
 
   // ============= Smart Money Endpoints =============

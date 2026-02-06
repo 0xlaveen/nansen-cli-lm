@@ -23,7 +23,7 @@ function parseArgs(args) {
       const key = arg.slice(2);
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help' || key === 'table') {
+      if (key === 'pretty' || key === 'help' || key === 'table' || key === 'no-retry') {
         result.flags[key] = true;
       } else if (next && !next.startsWith('-')) {
         // Try to parse as JSON first
@@ -201,6 +201,8 @@ GLOBAL OPTIONS:
   --order-by     JSON array with sort order (advanced)
   --days         Date range in days (default: 30 for most endpoints)
   --symbol       Token symbol (for perp endpoints)
+  --no-retry     Disable automatic retry on rate limits/errors
+  --retries <n>  Max retry attempts (default: 3)
 
 EXAMPLES:
   # Get Smart Money netflow on Solana
@@ -502,7 +504,12 @@ async function main() {
   }
 
   try {
-    const api = new NansenAPI();
+    // Configure retry options
+    const retryOptions = flags['no-retry'] 
+      ? { maxRetries: 0 } 
+      : { maxRetries: options.retries || 3 };
+    
+    const api = new NansenAPI(undefined, undefined, { retry: retryOptions });
     const result = await commands[command](subArgs, api, flags, options);
     output({ success: true, data: result }, pretty, table);
   } catch (error) {

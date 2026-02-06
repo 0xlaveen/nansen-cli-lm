@@ -1058,31 +1058,49 @@ describe('NansenAPI', () => {
     it('should throw with message from API error response', async () => {
       if (LIVE_TEST) return;
       
-      mockFetch.mockResolvedValueOnce({
+      const errorResponse = {
         ok: false,
         status: 401,
+        headers: new Map(),
         json: async () => ({ error: 'Unauthorized', message: 'Invalid API key' })
-      });
+      };
+      errorResponse.headers.get = () => null;
+      
+      mockFetch.mockResolvedValueOnce(errorResponse);
 
       await expect(api.smartMoneyNetflow({})).rejects.toThrow('Invalid API key');
     });
 
-    it('should throw on network errors', async () => {
+    it('should throw on network errors after retries', async () => {
       if (LIVE_TEST) return;
       
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      // Mock multiple failures for retry attempts
+      mockFetch
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockRejectedValueOnce(new Error('Network error'));
 
       await expect(api.smartMoneyNetflow({})).rejects.toThrow('Network error');
     });
 
-    it('should include status code in error object', async () => {
+    it('should include status code in error object after retries', async () => {
       if (LIVE_TEST) return;
       
-      mockFetch.mockResolvedValueOnce({
+      // Mock multiple 429 responses for retry attempts
+      const rateLimitResponse = {
         ok: false,
         status: 429,
+        headers: new Map(),
         json: async () => ({ error: 'Rate limited' })
-      });
+      };
+      rateLimitResponse.headers.get = () => null;
+      
+      mockFetch
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(rateLimitResponse);
 
       let thrownError;
       try {
@@ -1098,22 +1116,36 @@ describe('NansenAPI', () => {
       expect(thrownError.message).toContain('Rate limited');
     });
 
-    it('should handle 500 server errors', async () => {
+    it('should handle 500 server errors after retries', async () => {
       if (LIVE_TEST) return;
       
-      mockFetch.mockResolvedValueOnce({
+      // Mock multiple 500 responses for retry attempts
+      const serverErrorResponse = {
         ok: false,
         status: 500,
+        headers: new Map(),
         json: async () => ({ error: 'Internal server error' })
-      });
+      };
+      serverErrorResponse.headers.get = () => null;
+      
+      mockFetch
+        .mockResolvedValueOnce(serverErrorResponse)
+        .mockResolvedValueOnce(serverErrorResponse)
+        .mockResolvedValueOnce(serverErrorResponse)
+        .mockResolvedValueOnce(serverErrorResponse);
 
       await expect(api.smartMoneyNetflow({})).rejects.toThrow();
     });
 
-    it('should handle timeout errors', async () => {
+    it('should handle timeout errors after retries', async () => {
       if (LIVE_TEST) return;
       
-      mockFetch.mockRejectedValueOnce(new Error('Request timeout'));
+      // Mock multiple timeout errors for retry attempts
+      mockFetch
+        .mockRejectedValueOnce(new Error('Request timeout'))
+        .mockRejectedValueOnce(new Error('Request timeout'))
+        .mockRejectedValueOnce(new Error('Request timeout'))
+        .mockRejectedValueOnce(new Error('Request timeout'));
 
       await expect(api.tokenScreener({ chains: ['solana'] })).rejects.toThrow('timeout');
     });
@@ -1122,11 +1154,16 @@ describe('NansenAPI', () => {
       if (LIVE_TEST) return;
       
       const errorData = { error: 'Bad request', details: { field: 'chains', message: 'required' } };
-      mockFetch.mockResolvedValueOnce({
+      const errorResponse = {
         ok: false,
         status: 400,
+        headers: new Map(),
         json: async () => errorData
-      });
+      };
+      errorResponse.headers.get = () => null;
+      
+      // 400 errors are not retried, so single mock is fine
+      mockFetch.mockResolvedValueOnce(errorResponse);
 
       let thrownError;
       try {
@@ -1136,7 +1173,36 @@ describe('NansenAPI', () => {
         thrownError = error;
       }
       
-      expect(thrownError.data).toEqual(errorData);
+      // Check that original error data is included (with retry metadata added)
+      expect(thrownError.data.error).toEqual(errorData.error);
+      expect(thrownError.data.details).toEqual(errorData.details);
+    });
+
+    it('should succeed after retry on transient failure', async () => {
+      if (LIVE_TEST) return;
+      
+      // First request fails with 429, second succeeds
+      const rateLimitResponse = {
+        ok: false,
+        status: 429,
+        headers: new Map(),
+        json: async () => ({ error: 'Rate limited' })
+      };
+      rateLimitResponse.headers.get = () => null;
+      
+      const successResponse = {
+        ok: true,
+        json: async () => ({ data: [{ token: 'TEST' }] })
+      };
+      
+      mockFetch
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(successResponse);
+
+      const result = await api.smartMoneyNetflow({ chains: ['solana'] });
+      
+      expect(result.data).toEqual([{ token: 'TEST' }]);
+      expect(result._meta?.retriedAttempts).toBe(1);
     });
   });
 

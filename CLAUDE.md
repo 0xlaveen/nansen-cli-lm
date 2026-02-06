@@ -96,6 +96,14 @@ const to = new Date().toISOString().split('T')[0];
 const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 ```
 
+### Retry Behavior
+- **Enabled by default** with 3 attempts
+- Retries on: 429, 500, 502, 503, 504, network errors
+- Exponential backoff with jitter (1s base, 30s max)
+- Respects `retry-after` headers
+- Disable with `--no-retry` or `options.retry = false`
+- Success responses include `_meta.retriedAttempts` if retried
+
 ### Response Format
 ```javascript
 // Success
