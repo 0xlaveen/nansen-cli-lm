@@ -90,7 +90,7 @@ export const SCHEMA = {
         },
         'pnl': {
           description: 'PnL and trade performance',
-          options: { address: { type: 'string', required: true }, chain: { type: 'string', default: 'ethereum' } },
+          options: { address: { type: 'string', required: true }, chain: { type: 'string', default: 'ethereum' }, date: { type: 'string', description: 'Date or date range (YYYY-MM-DD or {"from":"YYYY-MM-DD","to":"YYYY-MM-DD"})' }, days: { type: 'number', default: 30 }, limit: { type: 'number' } },
           returns: ['token_address', 'token_symbol', 'realized_pnl_usd', 'unrealized_pnl_usd', 'total_pnl_usd']
         },
         'search': {
@@ -1048,7 +1048,10 @@ export function buildCommands(deps = {}) {
           const date = parseDateOption(options.date, days);
           return apiInstance.addressTransactions({ address, chain, filters, orderBy, pagination, days, date });
         },
-        'pnl': () => apiInstance.addressPnl({ address, chain }),
+        'pnl': () => {
+          const date = parseDateOption(options.date, days);
+          return apiInstance.addressPnl({ address, chain, date, days, pagination });
+        },
         'search': () => apiInstance.entitySearch({ query: options.query }),
         'historical-balances': () => apiInstance.addressHistoricalBalances({ address, chain, filters, orderBy, pagination, days }),
         'related-wallets': () => apiInstance.addressRelatedWallets({ address, chain, orderBy, pagination }),
