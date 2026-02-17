@@ -172,6 +172,7 @@ export const SCHEMA = {
             chains: { type: 'array' },
             timeframe: { type: 'string', default: '24h', enum: ['5m', '10m', '1h', '6h', '24h', '7d', '30d'] },
             'smart-money': { type: 'boolean', description: 'Filter for Smart Money only' },
+            search: { type: 'string', description: 'Filter results by token symbol or name (client-side)' },
             limit: { type: 'number' },
             sort: { type: 'string' }
           },
@@ -773,10 +774,14 @@ COMMANDS:
   logout         Remove saved API key
   schema         Output JSON schema for all commands (for agent introspection)
   cache          Cache management (clear)
-  smart-money    Smart Money analytics (netflow, dex-trades, holdings, dcas, historical-holdings)
-  profiler       Wallet profiling (balance, labels, pnl, batch, trace, compare, counterparties)
-  token          Token God Mode (screener, holders, flows, trades, pnl, perp-trades, perp-positions)
-  portfolio      Portfolio analytics (defi-holdings)
+  smart-money    Smart Money analytics (netflow, dex-trades, perp-trades, holdings, dcas, historical-holdings)
+  profiler       Wallet profiling (balance, labels, transactions, pnl, pnl-summary, search,
+                   historical-balances, related-wallets, counterparties, perp-positions, perp-trades,
+                   batch, trace, compare)
+  token          Token God Mode (screener, holders, flows, dex-trades, pnl, who-bought-sold,
+                   flow-intelligence, transfers, jup-dca, perp-trades, perp-positions,
+                   perp-pnl-leaderboard)
+  portfolio      Portfolio analytics (defi)
   help           Show this help message
 
 GLOBAL OPTIONS:
@@ -1122,7 +1127,20 @@ export function buildCommands(deps = {}) {
       }
 
       const handlers = {
-        'screener': () => apiInstance.tokenScreener({ chains, timeframe, filters, orderBy, pagination }),
+        'screener': async () => {
+          const result = await apiInstance.tokenScreener({ chains, timeframe, filters, orderBy, pagination });
+          // Client-side search filter (API doesn't support server-side search)
+          const search = options.search;
+          if (search && result?.data) {
+            const q = search.toLowerCase();
+            const filtered = result.data.filter(t => 
+              (t.token_symbol && t.token_symbol.toLowerCase().includes(q)) ||
+              (t.token_name && t.token_name.toLowerCase().includes(q))
+            );
+            return { ...result, data: filtered };
+          }
+          return result;
+        },
         'holders': () => apiInstance.tokenHolders({ tokenAddress, chain, labelType: onlySmartMoney ? 'smart_money' : 'all_holders', filters, orderBy, pagination }),
         'flows': () => {
           const date = parseDateOption(options.date, days);
