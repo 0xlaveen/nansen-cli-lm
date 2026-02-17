@@ -634,14 +634,23 @@ export class NansenAPI {
   }
 
   async addressPnl(params = {}) {
-    const { address, chain = 'ethereum' } = params;
+    const { address, chain = 'ethereum', date, days = 30, pagination } = params;
     if (address) {
       const validation = validateAddress(address, chain);
       if (!validation.valid) throw new NansenError(validation.error, validation.code);
     }
-    return this.request('/api/v1/profiler/address/pnl-and-trade-performance', {
+    // Build date range
+    let dateRange = date;
+    if (!dateRange) {
+      const to = new Date().toISOString().split('T')[0];
+      const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      dateRange = { from, to };
+    }
+    return this.request('/api/v1/profiler/address/pnl', {
       address,
-      chain
+      chain,
+      date: dateRange,
+      pagination
     });
   }
 

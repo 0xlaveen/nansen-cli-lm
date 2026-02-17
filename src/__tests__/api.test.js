@@ -559,9 +559,12 @@ describe('NansenAPI', () => {
           chain: 'ethereum'
         });
         
-        const body = expectFetchCalledWith('/api/v1/profiler/address/pnl-and-trade-performance');
+        const body = expectFetchCalledWith('/api/v1/profiler/address/pnl');
         expect(body.address).toBe(TEST_DATA.ethereum.address);
         expect(body.chain).toBe('ethereum');
+        expect(body.date).toBeDefined();
+        expect(body.date.from).toBeDefined();
+        expect(body.date.to).toBeDefined();
         
         expect(result.total_pnl).toBe(50000);
         expect(result.realized_pnl).toBe(30000);

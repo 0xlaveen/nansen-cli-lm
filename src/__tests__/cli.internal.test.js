@@ -254,6 +254,23 @@ describe('HELP', () => {
     expect(HELP).toContain('COMMANDS:');
     expect(HELP).toContain('EXAMPLES:');
   });
+
+  it('should list all subcommands in help text', () => {
+    // smart-money
+    expect(HELP).toContain('perp-trades');
+    // profiler
+    expect(HELP).toContain('transactions');
+    expect(HELP).toContain('pnl-summary');
+    expect(HELP).toContain('historical-balances');
+    expect(HELP).toContain('related-wallets');
+    expect(HELP).toContain('perp-positions');
+    // token
+    expect(HELP).toContain('who-bought-sold');
+    expect(HELP).toContain('flow-intelligence');
+    expect(HELP).toContain('transfers');
+    expect(HELP).toContain('jup-dca');
+    expect(HELP).toContain('perp-pnl-leaderboard');
+  });
 });
 
 describe('NO_AUTH_COMMANDS', () => {
@@ -445,6 +462,21 @@ describe('buildCommands', () => {
       expect(mockApi.tokenScreener).toHaveBeenCalledWith(
         expect.objectContaining({ filters: { include_smart_money_labels: ['Fund', 'Smart Trader', '30D Smart Trader', '90D Smart Trader', '180D Smart Trader'] } })
       );
+    });
+
+    it('should filter screener results by search option (client-side)', async () => {
+      const mockApi = {
+        tokenScreener: vi.fn().mockResolvedValue({ data: [
+          { token_symbol: 'PEPE', token_name: 'Pepe', price_usd: 0.001 },
+          { token_symbol: 'USDC', token_name: 'USD Coin', price_usd: 1.0 },
+          { token_symbol: 'PEPEFORK', token_name: 'Pepe Fork', price_usd: 0.0001 },
+        ] })
+      };
+      const result = await commands['token'](['screener'], mockApi, {}, { chain: 'ethereum', search: 'PEPE' });
+      
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].token_symbol).toBe('PEPE');
+      expect(result.data[1].token_symbol).toBe('PEPEFORK');
     });
 
     it('should call holders with token address', async () => {
