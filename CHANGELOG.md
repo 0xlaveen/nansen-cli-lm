@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0
+
+### Minor Changes
+
+- [#12](https://github.com/nansen-ai/nansen-cli/pull/12) [`8c1d2d5`](https://github.com/nansen-ai/nansen-cli/commit/8c1d2d524f98b560f6f540c42a28579e1bfd3fc6) Thanks [@TimNooren](https://github.com/TimNooren)! - Add x402 payment required handling. HTTP 402 responses now return a `PAYMENT_REQUIRED` error code with decoded payment requirements (network, amount, asset, payTo) from the x402 protocol.
+
 ## 1.4.0
 
 ### Minor Changes
