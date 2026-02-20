@@ -321,6 +321,16 @@ export const SCHEMA = {
             mints: { type: 'string', required: true, description: 'Comma-separated mint addresses' }
           },
           returns: ['warnings', 'info']
+        },
+        'swap': {
+          description: 'Full swap: get quote → sign with Privy wallet → execute (end-to-end)',
+          options: {
+            'input-mint': { type: 'string', required: true, description: 'Input token (mint or alias: SOL, USDC, etc.)' },
+            'output-mint': { type: 'string', required: true, description: 'Output token (mint or alias)' },
+            amount: { type: 'string', required: true, description: 'Amount in atomic units' },
+            'wallet-id': { type: 'string', required: true, description: 'Privy wallet ID (from nansen wallet create --chain-type solana)' }
+          },
+          returns: ['status', 'signature', 'inputAmount', 'outputAmount', 'inputMint', 'outputMint']
         }
       }
     },
@@ -1429,16 +1439,17 @@ export function buildCommands(deps = {}) {
 
       if (subcommand === 'help') {
         return {
-          commands: ['order', 'execute', 'holdings', 'search', 'shield'],
-          description: 'Trade tokens on Solana via Jupiter Ultra Swap',
+          commands: ['swap', 'order', 'execute', 'holdings', 'search', 'shield'],
+          description: 'Trade tokens on Solana via Jupiter Ultra Swap + Privy wallet signing',
           examples: [
+            'nansen trade swap --input-mint SOL --output-mint USDC --amount 100000000 --wallet-id <privy-wallet-id>',
             'nansen trade search --query SOL',
             'nansen trade holdings --address <wallet>',
-            'nansen trade order --input-mint So11...112 --output-mint EPjF...t1v --amount 100000000 --taker <wallet>',
+            'nansen trade order --input-mint SOL --output-mint USDC --amount 100000000 --taker <wallet>',
             'nansen trade execute --signed-tx <base64> --request-id <id>',
             'nansen trade shield --mints <mint1>,<mint2>'
           ],
-          setup: 'Set JUPITER_API_KEY env var. Get one from https://portal.jup.ag'
+          setup: 'Requires: JUPITER_API_KEY (https://portal.jup.ag) + PRIVY_APP_ID/PRIVY_APP_SECRET for swap'
         };
       }
 
@@ -1483,7 +1494,74 @@ export function buildCommands(deps = {}) {
         }),
         'holdings': () => jup.holdings(options.address || args[1]),
         'search': () => jup.search(options.query || args[1]),
-        'shield': () => jup.shield(options.mints || args[1])
+        'shield': () => jup.shield(options.mints || args[1]),
+        'swap': async () => {
+          const inputMint = resolveMint(options['input-mint']);
+          const outputMint = resolveMint(options['output-mint']);
+          const amount = options.amount;
+          const walletId = options['wallet-id'];
+
+          if (!inputMint || !outputMint || !amount || !walletId) {
+            return { error: 'Required: --input-mint, --output-mint, --amount, --wallet-id' };
+          }
+
+          // Step 1: Get Privy wallet address for taker
+          let privy;
+          try {
+            privy = new PrivyAPI();
+          } catch (e) {
+            return { error: `Privy auth failed: ${e.message}`, hint: 'Set PRIVY_APP_ID and PRIVY_APP_SECRET' };
+          }
+
+          const wallet = await privy.getWallet(walletId);
+          const takerAddress = wallet.address;
+          if (!takerAddress) {
+            return { error: `Could not get address for wallet ${walletId}` };
+          }
+
+          // Step 2: Get order from Jupiter
+          const order = await jup.order({ inputMint, outputMint, amount, taker: takerAddress });
+          if (!order.transaction || !order.requestId) {
+            return { error: 'Jupiter order failed', details: order };
+          }
+
+          const quote = {
+            inputMint: order.inputMint,
+            outputMint: order.outputMint,
+            inAmount: order.inAmount,
+            outAmount: order.outAmount,
+            inUsdValue: order.inUsdValue,
+            outUsdValue: order.outUsdValue,
+            priceImpact: order.priceImpact
+          };
+
+          // Step 3: Sign transaction with Privy wallet
+          const signResult = await privy.signTransaction({
+            walletId,
+            transaction: order.transaction
+          });
+
+          const signedTx = signResult?.data?.signedTransaction || signResult?.signedTransaction;
+          if (!signedTx) {
+            return { error: 'Privy signing failed', details: signResult };
+          }
+
+          // Step 4: Execute via Jupiter
+          const execResult = await jup.execute({
+            signedTransaction: signedTx,
+            requestId: order.requestId
+          });
+
+          return {
+            ...quote,
+            status: execResult.status,
+            signature: execResult.signature,
+            slot: execResult.slot,
+            totalInputAmount: execResult.totalInputAmount,
+            totalOutputAmount: execResult.totalOutputAmount,
+            explorer: execResult.signature ? `https://solscan.io/tx/${execResult.signature}` : undefined
+          };
+        }
       };
 
       if (!handlers[subcommand]) {

@@ -1124,6 +1124,30 @@ export class PrivyAPI {
       params: { transaction }
     });
   }
+
+  async signTransaction(params = {}) {
+    const { walletId, transaction, caip2 = 'solana:mainnet' } = params;
+    if (!walletId || !transaction) {
+      throw new NansenError('walletId and transaction are required', ErrorCode.MISSING_PARAM);
+    }
+    return this.request('POST', `/v1/wallets/${walletId}/rpc`, {
+      method: 'signTransaction',
+      caip2,
+      params: { transaction }
+    });
+  }
+
+  async signAndSendTransaction(params = {}) {
+    const { walletId, transaction, caip2 = 'solana:mainnet' } = params;
+    if (!walletId || !transaction) {
+      throw new NansenError('walletId and transaction are required', ErrorCode.MISSING_PARAM);
+    }
+    return this.request('POST', `/v1/wallets/${walletId}/rpc`, {
+      method: 'signAndSendTransaction',
+      caip2,
+      params: { transaction }
+    });
+  }
 }
 
 // ============= Coinbase Agentic Wallet (awal CLI) =============
