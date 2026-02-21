@@ -3,7 +3,7 @@
  * Extracted from index.js for coverage
  */
 
-import { NansenAPI, NansenError, ErrorCode, PrivyAPI, JupiterAPI, awalCommand, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir, validateAddress, sleep } from './api.js';
+import { NansenAPI, NansenError, ErrorCode, PrivyAPI, awalCommand, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir, validateAddress, sleep } from './api.js';
 import fs from 'fs';
 import { getUpdateNotification, scheduleUpdateCheck } from './update-check.js';
 import { createRequire } from 'module';
@@ -276,61 +276,6 @@ export const SCHEMA = {
             filters: { type: 'object' }
           },
           returns: ['address', 'address_label', 'realized_pnl', 'unrealized_pnl', 'total_pnl', 'trade_count', 'win_rate']
-        }
-      }
-    },
-    'trade': {
-      description: 'Trade tokens on Solana via Jupiter Ultra Swap API',
-      subcommands: {
-        'order': {
-          description: 'Get a swap quote and unsigned transaction',
-          options: {
-            'input-mint': { type: 'string', required: true, description: 'Input token mint address' },
-            'output-mint': { type: 'string', required: true, description: 'Output token mint address' },
-            amount: { type: 'string', required: true, description: 'Amount in atomic units (lamports/smallest unit)' },
-            taker: { type: 'string', description: 'Taker wallet address (for signing)' },
-            slippage: { type: 'number', description: 'Slippage tolerance in basis points' }
-          },
-          returns: ['inputMint', 'outputMint', 'inAmount', 'outAmount', 'inUsdValue', 'outUsdValue', 'priceImpact', 'transaction', 'requestId']
-        },
-        'execute': {
-          description: 'Execute a signed swap transaction',
-          options: {
-            'signed-tx': { type: 'string', required: true, description: 'Base64-encoded signed transaction' },
-            'request-id': { type: 'string', required: true, description: 'Request ID from order response' }
-          },
-          returns: ['status', 'signature', 'totalInputAmount', 'totalOutputAmount']
-        },
-        'holdings': {
-          description: 'Get token holdings for a wallet',
-          options: {
-            address: { type: 'string', required: true, description: 'Solana wallet address' }
-          },
-          returns: ['amount', 'uiAmount', 'tokens']
-        },
-        'search': {
-          description: 'Search for tokens by name, symbol, or mint',
-          options: {
-            query: { type: 'string', required: true, description: 'Token name, symbol, or mint address' }
-          },
-          returns: ['tokens']
-        },
-        'shield': {
-          description: 'Check token safety and warnings',
-          options: {
-            mints: { type: 'string', required: true, description: 'Comma-separated mint addresses' }
-          },
-          returns: ['warnings', 'info']
-        },
-        'swap': {
-          description: 'Full swap: get quote → sign with Privy wallet → execute (end-to-end)',
-          options: {
-            'input-mint': { type: 'string', required: true, description: 'Input token (mint or alias: SOL, USDC, etc.)' },
-            'output-mint': { type: 'string', required: true, description: 'Output token (mint or alias)' },
-            amount: { type: 'string', required: true, description: 'Amount in atomic units' },
-            'wallet-id': { type: 'string', required: true, description: 'Privy wallet ID (from nansen wallet create --chain-type solana)' }
-          },
-          returns: ['status', 'signature', 'inputAmount', 'outputAmount', 'inputMint', 'outputMint']
         }
       }
     },
@@ -1434,143 +1379,6 @@ export function buildCommands(deps = {}) {
       return handlers[subcommand]();
     },
 
-    'trade': async (args, apiInstance, flags, options) => {
-      const subcommand = args[0] || 'help';
-
-      if (subcommand === 'help') {
-        return {
-          commands: ['swap', 'order', 'execute', 'holdings', 'search', 'shield'],
-          description: 'Trade tokens on Solana via Jupiter Ultra Swap + Privy wallet signing',
-          examples: [
-            'nansen trade swap --input-mint SOL --output-mint USDC --amount 100000000 --wallet-id <privy-wallet-id>',
-            'nansen trade search --query SOL',
-            'nansen trade holdings --address <wallet>',
-            'nansen trade order --input-mint SOL --output-mint USDC --amount 100000000 --taker <wallet>',
-            'nansen trade execute --signed-tx <base64> --request-id <id>',
-            'nansen trade shield --mints <mint1>,<mint2>'
-          ],
-          setup: 'Requires: JUPITER_API_KEY (https://portal.jup.ag) + PRIVY_APP_ID/PRIVY_APP_SECRET for swap'
-        };
-      }
-
-      let jup;
-      try {
-        jup = new JupiterAPI();
-      } catch (e) {
-        return { error: e.message };
-      }
-
-      if (!jup.apiKey) {
-        return { error: 'Jupiter API key required. Set JUPITER_API_KEY env var. Get one from https://portal.jup.ag' };
-      }
-
-      // Common token aliases for convenience
-      const TOKEN_ALIASES = {
-        'SOL': 'So11111111111111111111111111111111111111112',
-        'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-        'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
-        'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
-        'WIF': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
-        'PENGU': '2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv',
-      };
-
-      const resolveMint = (input) => {
-        if (!input) return input;
-        return TOKEN_ALIASES[input.toUpperCase()] || input;
-      };
-
-      const handlers = {
-        'order': () => jup.order({
-          inputMint: resolveMint(options['input-mint'] || args[1]),
-          outputMint: resolveMint(options['output-mint'] || args[2]),
-          amount: options.amount || args[3],
-          taker: options.taker,
-          slippageBps: options.slippage
-        }),
-        'execute': () => jup.execute({
-          signedTransaction: options['signed-tx'],
-          requestId: options['request-id']
-        }),
-        'holdings': () => jup.holdings(options.address || args[1]),
-        'search': () => jup.search(options.query || args[1]),
-        'shield': () => jup.shield(options.mints || args[1]),
-        'swap': async () => {
-          const inputMint = resolveMint(options['input-mint']);
-          const outputMint = resolveMint(options['output-mint']);
-          const amount = options.amount;
-          const walletId = options['wallet-id'];
-
-          if (!inputMint || !outputMint || !amount || !walletId) {
-            return { error: 'Required: --input-mint, --output-mint, --amount, --wallet-id' };
-          }
-
-          // Step 1: Get Privy wallet address for taker
-          let privy;
-          try {
-            privy = new PrivyAPI();
-          } catch (e) {
-            return { error: `Privy auth failed: ${e.message}`, hint: 'Set PRIVY_APP_ID and PRIVY_APP_SECRET' };
-          }
-
-          const wallet = await privy.getWallet(walletId);
-          const takerAddress = wallet.address;
-          if (!takerAddress) {
-            return { error: `Could not get address for wallet ${walletId}` };
-          }
-
-          // Step 2: Get order from Jupiter
-          const order = await jup.order({ inputMint, outputMint, amount, taker: takerAddress });
-          if (!order.transaction || !order.requestId) {
-            return { error: 'Jupiter order failed', details: order };
-          }
-
-          const quote = {
-            inputMint: order.inputMint,
-            outputMint: order.outputMint,
-            inAmount: order.inAmount,
-            outAmount: order.outAmount,
-            inUsdValue: order.inUsdValue,
-            outUsdValue: order.outUsdValue,
-            priceImpact: order.priceImpact
-          };
-
-          // Step 3: Sign transaction with Privy wallet
-          const signResult = await privy.signTransaction({
-            walletId,
-            transaction: order.transaction
-          });
-
-          const signedTx = signResult?.data?.signedTransaction || signResult?.signedTransaction;
-          if (!signedTx) {
-            return { error: 'Privy signing failed', details: signResult };
-          }
-
-          // Step 4: Execute via Jupiter
-          const execResult = await jup.execute({
-            signedTransaction: signedTx,
-            requestId: order.requestId
-          });
-
-          return {
-            ...quote,
-            status: execResult.status,
-            signature: execResult.signature,
-            slot: execResult.slot,
-            totalInputAmount: execResult.totalInputAmount,
-            totalOutputAmount: execResult.totalOutputAmount,
-            explorer: execResult.signature ? `https://solscan.io/tx/${execResult.signature}` : undefined
-          };
-        }
-      };
-
-      if (!handlers[subcommand]) {
-        return { error: `Unknown subcommand: ${subcommand}`, available: Object.keys(handlers) };
-      }
-
-      return handlers[subcommand]();
-    },
-
     'wallet': async (args, apiInstance, flags, options) => {
       const subcommand = args[0] || 'help';
 
@@ -1757,7 +1565,7 @@ export function buildCommands(deps = {}) {
 }
 
 // Commands that don't require API authentication
-export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema', 'cache', 'wallet', 'trade'];
+export const NO_AUTH_COMMANDS = ['login', 'logout', 'help', 'schema', 'cache', 'wallet'];
 
 // Command aliases for convenience
 export const COMMAND_ALIASES = {
@@ -1956,7 +1764,7 @@ export async function runCLI(rawArgs, deps = {}) {
     const result = await commands[command](subArgs, null, flags, options);
     
     // Schema, wallet, and trade commands return data that should be output
-    if ((command === 'schema' || command === 'wallet' || command === 'trade') && result) {
+    if ((command === 'schema' || command === 'wallet') && result) {
       const formatted = formatOutput(result, { pretty, table: false });
       output(formatted.text);
       notify();
