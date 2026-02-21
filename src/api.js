@@ -1180,6 +1180,181 @@ export async function awalCommand(args = []) {
   }
 }
 
+// ============= Trade Journal =============
+
+const JOURNAL_FILE = path.join(CONFIG_DIR, 'trade-journal.json');
+const MONITOR_CONFIG_FILE = path.join(CONFIG_DIR, 'monitor-config.json');
+
+export class TradeJournal {
+  constructor() {
+    this.journalFile = JOURNAL_FILE;
+    this.monitorFile = MONITOR_CONFIG_FILE;
+  }
+
+  _ensureDir() {
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { mode: 0o700, recursive: true });
+    }
+  }
+
+  _readJournal() {
+    try {
+      return JSON.parse(fs.readFileSync(this.journalFile, 'utf8'));
+    } catch {
+      return { trades: [], version: 1 };
+    }
+  }
+
+  _writeJournal(journal) {
+    this._ensureDir();
+    fs.writeFileSync(this.journalFile, JSON.stringify(journal, null, 2), { mode: 0o600 });
+  }
+
+  // Log a new trade entry
+  logTrade(entry) {
+    const journal = this._readJournal();
+    const trade = {
+      id: `trade_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      status: 'open',  // open | closed | failed
+      ...entry,
+      updates: [],
+      pnl: null
+    };
+    journal.trades.push(trade);
+    this._writeJournal(journal);
+    return trade;
+  }
+
+  // Update an existing trade (price check, status change, close)
+  updateTrade(tradeId, update) {
+    const journal = this._readJournal();
+    const trade = journal.trades.find(t => t.id === tradeId);
+    if (!trade) throw new NansenError(`Trade ${tradeId} not found`, ErrorCode.NOT_FOUND);
+
+    trade.updates.push({
+      timestamp: new Date().toISOString(),
+      ...update
+    });
+
+    if (update.status) trade.status = update.status;
+    if (update.pnl !== undefined) trade.pnl = update.pnl;
+    if (update.exitPrice) trade.exitPrice = update.exitPrice;
+    if (update.closedAt) trade.closedAt = update.closedAt;
+
+    this._writeJournal(journal);
+    return trade;
+  }
+
+  // Close a trade with final PnL
+  closeTrade(tradeId, { exitPrice, exitAmount, signature, reason }) {
+    const journal = this._readJournal();
+    const trade = journal.trades.find(t => t.id === tradeId);
+    if (!trade) throw new NansenError(`Trade ${tradeId} not found`, ErrorCode.NOT_FOUND);
+
+    trade.status = 'closed';
+    trade.closedAt = new Date().toISOString();
+    trade.exitPrice = exitPrice;
+    trade.exitAmount = exitAmount;
+    trade.exitSignature = signature;
+    trade.closeReason = reason;
+
+    // Calculate PnL
+    if (trade.entryUsdValue && exitPrice) {
+      const exitUsdValue = parseFloat(exitAmount || trade.outAmount || 0) * parseFloat(exitPrice);
+      trade.pnl = {
+        usd: exitUsdValue - parseFloat(trade.entryUsdValue),
+        percent: ((exitUsdValue - parseFloat(trade.entryUsdValue)) / parseFloat(trade.entryUsdValue)) * 100,
+        result: exitUsdValue >= parseFloat(trade.entryUsdValue) ? 'win' : 'loss'
+      };
+    }
+
+    trade.updates.push({
+      timestamp: trade.closedAt,
+      type: 'close',
+      reason,
+      exitPrice,
+      pnl: trade.pnl
+    });
+
+    this._writeJournal(journal);
+    return trade;
+  }
+
+  // Get all trades with optional filters
+  getTrades({ status, limit, since } = {}) {
+    const journal = this._readJournal();
+    let trades = journal.trades;
+
+    if (status) trades = trades.filter(t => t.status === status);
+    if (since) {
+      const sinceDate = new Date(since);
+      trades = trades.filter(t => new Date(t.timestamp) >= sinceDate);
+    }
+
+    trades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if (limit) trades = trades.slice(0, limit);
+
+    return trades;
+  }
+
+  // Get performance summary for agent learning
+  getSummary({ since } = {}) {
+    const trades = this.getTrades({ since });
+    const closed = trades.filter(t => t.status === 'closed' && t.pnl);
+    const open = trades.filter(t => t.status === 'open');
+
+    const wins = closed.filter(t => t.pnl.result === 'win');
+    const losses = closed.filter(t => t.pnl.result === 'loss');
+
+    const totalPnlUsd = closed.reduce((sum, t) => sum + (t.pnl?.usd || 0), 0);
+    const avgWin = wins.length ? wins.reduce((s, t) => s + t.pnl.usd, 0) / wins.length : 0;
+    const avgLoss = losses.length ? losses.reduce((s, t) => s + t.pnl.usd, 0) / losses.length : 0;
+
+    // Token-level breakdown
+    const byToken = {};
+    for (const t of closed) {
+      const key = t.outputMint || t.symbol || 'unknown';
+      if (!byToken[key]) byToken[key] = { trades: 0, wins: 0, pnlUsd: 0 };
+      byToken[key].trades++;
+      if (t.pnl.result === 'win') byToken[key].wins++;
+      byToken[key].pnlUsd += t.pnl.usd || 0;
+    }
+
+    return {
+      totalTrades: trades.length,
+      openPositions: open.length,
+      closedTrades: closed.length,
+      wins: wins.length,
+      losses: losses.length,
+      winRate: closed.length ? `${((wins.length / closed.length) * 100).toFixed(1)}%` : 'N/A',
+      totalPnlUsd: totalPnlUsd.toFixed(2),
+      avgWinUsd: avgWin.toFixed(2),
+      avgLossUsd: avgLoss.toFixed(2),
+      profitFactor: avgLoss !== 0 ? Math.abs(avgWin / avgLoss).toFixed(2) : 'N/A',
+      byToken,
+      // Agent learning signal
+      signal: totalPnlUsd > 0 ? 'POSITIVE — current strategy is profitable, continue with adjustments'
+        : totalPnlUsd < 0 ? 'NEGATIVE — review losing trades, adjust entry/exit criteria'
+        : 'NEUTRAL — insufficient data'
+    };
+  }
+
+  // Monitor config management
+  getMonitorConfig() {
+    try {
+      return JSON.parse(fs.readFileSync(this.monitorFile, 'utf8'));
+    } catch {
+      return { rules: [], wallets: [], intervalHours: 6, enabled: false };
+    }
+  }
+
+  saveMonitorConfig(config) {
+    this._ensureDir();
+    fs.writeFileSync(this.monitorFile, JSON.stringify(config, null, 2), { mode: 0o600 });
+  }
+}
+
 // ============= Jupiter Ultra Swap API =============
 
 export class JupiterAPI {

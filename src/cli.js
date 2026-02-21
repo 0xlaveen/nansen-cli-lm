@@ -3,7 +3,7 @@
  * Extracted from index.js for coverage
  */
 
-import { NansenAPI, NansenError, ErrorCode, PrivyAPI, JupiterAPI, awalCommand, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir, validateAddress, sleep } from './api.js';
+import { NansenAPI, NansenError, ErrorCode, PrivyAPI, JupiterAPI, TradeJournal, awalCommand, saveConfig, deleteConfig, getConfigFile, clearCache, getCacheDir, validateAddress, sleep } from './api.js';
 import fs from 'fs';
 import { getUpdateNotification, scheduleUpdateCheck } from './update-check.js';
 import { createRequire } from 'module';
@@ -331,6 +331,37 @@ export const SCHEMA = {
             'wallet-id': { type: 'string', required: true, description: 'Privy wallet ID (from nansen wallet create --chain-type solana)' }
           },
           returns: ['status', 'signature', 'inputAmount', 'outputAmount', 'inputMint', 'outputMint']
+        },
+        'journal': {
+          description: 'View trade journal — history, PnL, and agent learning signals',
+          options: {
+            status: { type: 'string', enum: ['open', 'closed', 'failed'], description: 'Filter by status' },
+            limit: { type: 'number', default: 20, description: 'Max trades to show' },
+            since: { type: 'string', description: 'Show trades since date (YYYY-MM-DD)' },
+            summary: { type: 'boolean', description: 'Show performance summary instead of trade list' }
+          },
+          returns: ['trades[]', 'summary{winRate, totalPnl, signal}']
+        },
+        'close': {
+          description: 'Close an open trade and record PnL',
+          options: {
+            id: { type: 'string', required: true, description: 'Trade ID to close' },
+            'exit-price': { type: 'string', required: true, description: 'Exit price in USD' },
+            'exit-amount': { type: 'string', description: 'Amount received' },
+            reason: { type: 'string', default: 'manual', description: 'Close reason (manual, stop-loss, take-profit, etc.)' }
+          },
+          returns: ['trade', 'pnl']
+        },
+        'monitor': {
+          description: 'Set up position monitoring cron job',
+          options: {
+            action: { type: 'string', required: true, enum: ['setup', 'status', 'rules', 'check'], description: 'Monitor action' },
+            wallet: { type: 'string', description: 'Wallet address to monitor' },
+            every: { type: 'string', description: 'Check interval (e.g., 6h, 1d, 30m)' },
+            'stop-loss': { type: 'number', description: 'Auto-close at this % loss (e.g., -10)' },
+            'take-profit': { type: 'number', description: 'Auto-close at this % gain (e.g., 20)' }
+          },
+          returns: ['config', 'positions', 'alerts']
         }
       }
     },
@@ -504,13 +535,19 @@ export function parseArgs(args) {
     const arg = args[i];
     
     if (arg.startsWith('--')) {
-      const key = arg.slice(2);
+      // Handle --key=value syntax
+      const eqIdx = arg.indexOf('=');
+      const key = eqIdx > -1 ? arg.slice(2, eqIdx) : arg.slice(2);
+      const eqValue = eqIdx > -1 ? arg.slice(eqIdx + 1) : null;
       const next = args[i + 1];
       
-      if (key === 'pretty' || key === 'help' || key === 'version' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache' || key === 'stream' || key === 'enrich') {
+      if (key === 'pretty' || key === 'help' || key === 'version' || key === 'table' || key === 'no-retry' || key === 'cache' || key === 'no-cache' || key === 'stream' || key === 'enrich' || key === 'summary') {
         result.flags[key] = true;
-      } else if (next && !next.startsWith('-')) {
-        // Try to parse as JSON first
+      } else if (eqValue !== null) {
+        // --key=value (handles negative numbers like --stop-loss=-10)
+        try { result.options[key] = JSON.parse(eqValue); } catch { result.options[key] = eqValue; }
+      } else if (next !== undefined && (!next.startsWith('-') || /^-\d/.test(next))) {
+        // Next arg is a value (allow negative numbers like -10)
         try {
           result.options[key] = JSON.parse(next);
         } catch {
@@ -520,7 +557,7 @@ export function parseArgs(args) {
       } else {
         result.flags[key] = true;
       }
-    } else if (arg.startsWith('-')) {
+    } else if (arg.startsWith('-') && !/^-\d/.test(arg)) {
       result.flags[arg.slice(1)] = true;
     } else {
       result._.push(arg);
@@ -1439,17 +1476,18 @@ export function buildCommands(deps = {}) {
 
       if (subcommand === 'help') {
         return {
-          commands: ['swap', 'order', 'execute', 'holdings', 'search', 'shield'],
-          description: 'Trade tokens on Solana via Jupiter Ultra Swap + Privy wallet signing',
+          commands: ['swap', 'journal', 'close', 'monitor', 'order', 'execute', 'holdings', 'search', 'shield'],
+          description: 'Trade tokens on Solana via Jupiter + Privy signing, with journal & monitoring',
           examples: [
-            'nansen trade swap --input-mint SOL --output-mint USDC --amount 100000000 --wallet-id <privy-wallet-id>',
-            'nansen trade search --query SOL',
-            'nansen trade holdings --address <wallet>',
-            'nansen trade order --input-mint SOL --output-mint USDC --amount 100000000 --taker <wallet>',
-            'nansen trade execute --signed-tx <base64> --request-id <id>',
-            'nansen trade shield --mints <mint1>,<mint2>'
+            'nansen trade swap --input-mint SOL --output-mint USDC --amount 100000000 --wallet-id <id>',
+            'nansen trade journal --summary',
+            'nansen trade journal --status open',
+            'nansen trade close --id <trade_id> --exit-price 1.50',
+            'nansen trade monitor --action setup --every 6h --wallet <addr> --stop-loss -10 --take-profit 20',
+            'nansen trade monitor --action check',
+            'nansen trade monitor --action cron-export'
           ],
-          setup: 'Requires: JUPITER_API_KEY (https://portal.jup.ag) + PRIVY_APP_ID/PRIVY_APP_SECRET for swap'
+          setup: 'JUPITER_API_KEY (portal.jup.ag) + PRIVY_APP_ID/PRIVY_APP_SECRET for swap'
         };
       }
 
@@ -1552,8 +1590,31 @@ export function buildCommands(deps = {}) {
             requestId: order.requestId
           });
 
+          // Step 5: Log to trade journal
+          const journal = new TradeJournal();
+          const tradeEntry = journal.logTrade({
+            inputMint: order.inputMint,
+            outputMint: order.outputMint,
+            inAmount: order.inAmount,
+            outAmount: order.outAmount,
+            entryUsdValue: String(order.inUsdValue || ''),
+            outUsdValue: String(order.outUsdValue || ''),
+            priceImpact: order.priceImpact,
+            walletId,
+            walletAddress: takerAddress,
+            signature: execResult.signature,
+            slot: execResult.slot,
+            executionStatus: execResult.status,
+            source: 'cli-swap'
+          });
+
+          if (execResult.status === 'Failed') {
+            journal.updateTrade(tradeEntry.id, { status: 'failed', reason: execResult.error });
+          }
+
           return {
             ...quote,
+            tradeId: tradeEntry.id,
             status: execResult.status,
             signature: execResult.signature,
             slot: execResult.slot,
@@ -1561,6 +1622,166 @@ export function buildCommands(deps = {}) {
             totalOutputAmount: execResult.totalOutputAmount,
             explorer: execResult.signature ? `https://solscan.io/tx/${execResult.signature}` : undefined
           };
+        },
+
+        // ---- Trade Journal ----
+        'journal': () => {
+          const journal = new TradeJournal();
+          if (options.summary || flags.summary) {
+            return journal.getSummary({ since: options.since });
+          }
+          const trades = journal.getTrades({
+            status: options.status,
+            limit: options.limit ? parseInt(options.limit) : 20,
+            since: options.since
+          });
+          return { count: trades.length, trades };
+        },
+
+        'close': () => {
+          const journal = new TradeJournal();
+          const tradeId = options.id || args[1];
+          if (!tradeId) return { error: 'Trade ID required. Usage: nansen trade close --id <trade_id>' };
+          const trade = journal.closeTrade(tradeId, {
+            exitPrice: options['exit-price'],
+            exitAmount: options['exit-amount'],
+            reason: options.reason || 'manual'
+          });
+          return { trade, pnl: trade.pnl };
+        },
+
+        // ---- Position Monitor ----
+        'monitor': async () => {
+          const journal = new TradeJournal();
+          const action = options.action || args[1] || 'status';
+
+          if (action === 'setup') {
+            const config = journal.getMonitorConfig();
+            if (options.wallet) {
+              if (!config.wallets.includes(options.wallet)) config.wallets.push(options.wallet);
+            }
+            if (options.every) {
+              // Parse interval: 6h, 1d, 30m
+              const match = options.every.match(/^(\d+)(m|h|d)$/);
+              if (!match) return { error: 'Invalid interval. Use format: 30m, 6h, 1d' };
+              const [, num, unit] = match;
+              const hours = unit === 'm' ? parseInt(num) / 60 : unit === 'd' ? parseInt(num) * 24 : parseInt(num);
+              config.intervalHours = hours;
+            }
+            if (options['stop-loss'] !== undefined) {
+              config.rules = config.rules.filter(r => r.type !== 'stop-loss');
+              config.rules.push({ type: 'stop-loss', percent: parseFloat(options['stop-loss']) });
+            }
+            if (options['take-profit'] !== undefined) {
+              config.rules = config.rules.filter(r => r.type !== 'take-profit');
+              config.rules.push({ type: 'take-profit', percent: parseFloat(options['take-profit']) });
+            }
+            config.enabled = true;
+
+            // Generate cron expression
+            const intervalMs = config.intervalHours * 60 * 60 * 1000;
+            config.cronExpression = `every ${config.intervalHours}h`;
+            config.cronIntervalMs = intervalMs;
+
+            journal.saveMonitorConfig(config);
+            return {
+              message: 'Monitor configured',
+              config,
+              hint: 'To activate, create a cron job: nansen trade monitor --action cron-export'
+            };
+          }
+
+          if (action === 'status') {
+            const config = journal.getMonitorConfig();
+            const openTrades = journal.getTrades({ status: 'open' });
+            return {
+              enabled: config.enabled,
+              wallets: config.wallets,
+              interval: `${config.intervalHours}h`,
+              rules: config.rules,
+              openPositions: openTrades.length
+            };
+          }
+
+          if (action === 'rules') {
+            const config = journal.getMonitorConfig();
+            return { rules: config.rules };
+          }
+
+          if (action === 'check') {
+            // Check open positions against current prices
+            const openTrades = journal.getTrades({ status: 'open' });
+            if (openTrades.length === 0) return { message: 'No open positions' };
+
+            const config = journal.getMonitorConfig();
+            const alerts = [];
+            const positions = [];
+
+            for (const trade of openTrades) {
+              // Try to get current price via holdings or other means
+              const position = {
+                tradeId: trade.id,
+                inputMint: trade.inputMint,
+                outputMint: trade.outputMint,
+                entryUsdValue: trade.entryUsdValue,
+                openedAt: trade.timestamp,
+                age: `${Math.round((Date.now() - new Date(trade.timestamp).getTime()) / 3600000)}h`
+              };
+
+              // Check rules
+              for (const rule of config.rules) {
+                if (rule.type === 'stop-loss' && trade.pnl?.percent <= rule.percent) {
+                  alerts.push({
+                    tradeId: trade.id,
+                    type: 'STOP_LOSS_HIT',
+                    rule,
+                    currentPnl: trade.pnl,
+                    action: 'CLOSE recommended'
+                  });
+                }
+                if (rule.type === 'take-profit' && trade.pnl?.percent >= rule.percent) {
+                  alerts.push({
+                    tradeId: trade.id,
+                    type: 'TAKE_PROFIT_HIT',
+                    rule,
+                    currentPnl: trade.pnl,
+                    action: 'CLOSE recommended'
+                  });
+                }
+              }
+
+              positions.push(position);
+            }
+
+            // Log the check to journal
+            for (const trade of openTrades) {
+              journal.updateTrade(trade.id, { type: 'monitor-check', alerts: alerts.filter(a => a.tradeId === trade.id) });
+            }
+
+            return {
+              checkedAt: new Date().toISOString(),
+              positions,
+              alerts: alerts.length > 0 ? alerts : 'No alerts',
+              summary: `${positions.length} open positions, ${alerts.length} alerts`
+            };
+          }
+
+          if (action === 'cron-export') {
+            const config = journal.getMonitorConfig();
+            if (!config.enabled) return { error: 'Monitor not configured. Run: nansen trade monitor --action setup --every 6h --wallet <addr>' };
+
+            return {
+              message: 'Add this cron job to your system or OpenClaw:',
+              openclaw: {
+                schedule: { kind: 'every', everyMs: config.cronIntervalMs },
+                payload: { kind: 'agentTurn', message: `Run: nansen trade monitor --action check. Review open positions, check PnL, and auto-close any positions that hit stop-loss or take-profit rules. Report results.` },
+                sessionTarget: 'isolated'
+              },
+              system: `*/${Math.max(1, Math.round(config.intervalHours * 60))} * * * * cd ~/.nansen && nansen trade monitor --action check`
+            };
+          }
+
+          return { error: `Unknown monitor action: ${action}`, available: ['setup', 'status', 'rules', 'check', 'cron-export'] };
         }
       };
 
