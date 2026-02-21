@@ -1180,4 +1180,81 @@ export async function awalCommand(args = []) {
   }
 }
 
+// ============= Jupiter Ultra Swap API =============
+
+export class JupiterAPI {
+  constructor(apiKey) {
+    this.apiKey = apiKey || process.env.JUPITER_API_KEY;
+    this.baseUrl = 'https://api.jup.ag/ultra/v1';
+  }
+
+  get headers() {
+    const h = { 'Content-Type': 'application/json' };
+    if (this.apiKey) h['x-api-key'] = this.apiKey;
+    return h;
+  }
+
+  async request(method, path, body = null) {
+    const url = `${this.baseUrl}${path}`;
+    const options = { method, headers: this.headers };
+    if (body && method === 'POST') {
+      options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new NansenError(
+        data?.message || data?.error || `Jupiter API error (${response.status})`,
+        response.status === 401 ? ErrorCode.UNAUTHORIZED : ErrorCode.UNKNOWN,
+        response.status,
+        data
+      );
+    }
+    return data;
+  }
+
+  async order(params = {}) {
+    const { inputMint, outputMint, amount, taker, slippageBps } = params;
+    if (!inputMint || !outputMint || !amount) {
+      throw new NansenError('inputMint, outputMint, and amount are required', ErrorCode.MISSING_PARAM);
+    }
+    const qs = new URLSearchParams({ inputMint, outputMint, amount: String(amount) });
+    if (taker) qs.set('taker', taker);
+    if (slippageBps) qs.set('slippageBps', String(slippageBps));
+    return this.request('GET', `/order?${qs.toString()}`);
+  }
+
+  async execute(params = {}) {
+    const { signedTransaction, requestId } = params;
+    if (!signedTransaction || !requestId) {
+      throw new NansenError('signedTransaction and requestId are required', ErrorCode.MISSING_PARAM);
+    }
+    return this.request('POST', '/execute', { signedTransaction, requestId });
+  }
+
+  async holdings(address) {
+    if (!address) {
+      throw new NansenError('Wallet address is required', ErrorCode.MISSING_PARAM);
+    }
+    return this.request('GET', `/holdings/${address}`);
+  }
+
+  async search(query) {
+    if (!query) {
+      throw new NansenError('Search query is required', ErrorCode.MISSING_PARAM);
+    }
+    return this.request('GET', `/search?query=${encodeURIComponent(query)}`);
+  }
+
+  async shield(mints) {
+    if (!mints) {
+      throw new NansenError('Mint address(es) required', ErrorCode.MISSING_PARAM);
+    }
+    const mintList = Array.isArray(mints) ? mints.join(',') : mints;
+    return this.request('GET', `/shield?mints=${mintList}`);
+  }
+}
+
 export default NansenAPI;
